@@ -342,6 +342,15 @@ cleanCommand.action(
         `${JSON.stringify({ dryRun: false, plan: planToJson(plans), results }, null, 2)}\n`,
       );
     } else {
+      // --yes skips the plan, so without this the blocked worktrees vanish and
+      // the user is left wondering why a match they expected was not removed.
+      for (const plan of plans.filter((p: Plan) => p.blocks.length > 0)) {
+        process.stdout.write(
+          `${paint('skipped', 'yellow')} ${plan.worktree.path}: ${plan.blocks
+            .map((b) => b.message)
+            .join('; ')}\n`,
+        );
+      }
       for (const r of results) {
         if (r.removed) {
           const branch = r.branch
