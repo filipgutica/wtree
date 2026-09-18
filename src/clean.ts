@@ -22,6 +22,12 @@ export interface Plan {
   /** Blocks that `--force` would clear. Empty when nothing is forceable. */
   overridden: Block[];
   removeBranch: string | null;
+  /**
+   * GitHub holds the commits of a merged PR, so its branch can be force deleted.
+   * Most repos squash or rebase, which rewrites the commit and makes
+   * `git branch -d` refuse every branch it was asked to clean up.
+   */
+  branchDeleteSafe: boolean;
 }
 
 export interface PlanOptions {
@@ -81,6 +87,7 @@ export const planRemoval = (wt: Worktree, opts: PlanOptions): Plan => {
     blocks,
     overridden,
     removeBranch: opts.deleteBranch && wt.branch && !wt.isMain ? wt.branch : null,
+    branchDeleteSafe: wt.pr.status === 'found' && wt.pr.state === 'MERGED',
   };
 };
 
@@ -99,7 +106,7 @@ export interface RemovalResult {
 export interface ExecuteOptions {
   repo: RepoContext;
   force?: boolean;
-  /** Use `git branch -D`, discarding unmerged branch commits. */
+  /** Use `git branch -D` for every branch, not just the ones with a merged PR. */
   forceBranchDelete?: boolean;
 }
 
@@ -133,10 +140,8 @@ export const execute = async (
 
     // Deleting the branch of a worktree that is still there would orphan the checkout.
     if (removal.ok && plan.removeBranch) {
-      const del = await git(
-        ['branch', forceBranchDelete ? '-D' : '-d', plan.removeBranch],
-        repo.root,
-      );
+      const flag = forceBranchDelete || plan.branchDeleteSafe ? '-D' : '-d';
+      const del = await git(['branch', flag, plan.removeBranch], repo.root);
       result.branchDeleted = del.ok;
       if (!del.ok) result.branchError = del.stderr.trim() || `git exited ${del.code}`;
     }

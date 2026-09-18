@@ -158,7 +158,12 @@ export const renderPlan = (plans: Plan[], cwd: string, ageBasis: AgeBasis): stri
         prStateOf(wt),
         ...(wt.sizeKb !== null ? [formatSize(wt.sizeKb)] : []),
       ].join(', ');
-      const branch = plan.removeBranch ? paint(` +branch ${plan.removeBranch}`, 'yellow') : '';
+      const branch = plan.removeBranch
+        ? paint(
+            ` +branch ${plan.removeBranch}${plan.branchDeleteSafe ? '' : ' (only if merged)'}`,
+            'yellow',
+          )
+        : '';
       const over =
         plan.overridden.length > 0
           ? paint(` [forced: ${plan.overridden.map((b) => b.code).join(', ')}]`, 'red')
@@ -224,6 +229,7 @@ export const planToJson = (plans: Plan[]): unknown[] =>
     branch: plan.worktree.branch,
     willRemove: plan.blocks.length === 0,
     deleteBranch: plan.removeBranch,
+    branchDeleteSafe: plan.branchDeleteSafe,
     blockedBy: plan.blocks.map((b) => ({ code: b.code, message: b.message, forceable: b.force })),
     overriddenByForce: plan.overridden.map((b) => ({ code: b.code, message: b.message })),
   }));

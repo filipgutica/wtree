@@ -93,8 +93,11 @@ Use `--age-by checkout` or `--age-by created` if you want the other reading.
 | a worktree with unpushed commits | yes |
 | a locked worktree | yes |
 
-Branch deletion is opt-in (`--delete-branch`) and uses `git branch -d`, so an
-unmerged branch survives. `--force-branch-delete` switches to `-d` → `-D`.
+Branch deletion is opt-in (`--delete-branch`). A branch whose PR is **merged** is
+deleted with `git branch -D`, because GitHub holds those commits; most repos squash
+or rebase, which rewrites the commit, so `-d` would refuse nearly every branch you
+asked it to clean up. Every other branch uses `-d` and survives if it is not fully
+merged. `--force-branch-delete` forces `-D` for all of them.
 
 **Fail closed on unknown PR state.** If `gh` is missing, unauthenticated, or the
 network is down, `wtree clean --pr-state ...` exits **3** with an error rather

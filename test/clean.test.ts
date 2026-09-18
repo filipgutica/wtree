@@ -96,4 +96,47 @@ describe('planRemoval', () => {
     const plan = planRemoval(makeWorktree(), { cwd: EXTERNAL_CWD });
     assert.deepEqual(plan.blocks, []);
   });
+
+  // Squash and rebase merges rewrite the commit, so `git branch -d` refuses the
+  // branch of a merged PR. Without this, --delete-branch cleans up almost nothing.
+  it('marks the branch of a merged PR as safe to force delete', () => {
+    const merged = makeWorktree({
+      pr: {
+        status: 'found',
+        number: 7,
+        state: 'MERGED',
+        title: 't',
+        url: 'u',
+        mergedAt: '2026-01-01T00:00:00.000Z',
+        closedAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        isCrossRepository: false,
+      },
+    });
+    assert.equal(planRemoval(merged, { cwd: EXTERNAL_CWD }).branchDeleteSafe, true);
+  });
+
+  it('does not mark open, closed or unknown PR branches as safe to force delete', () => {
+    const base = {
+      status: 'found' as const,
+      number: 7,
+      title: 't',
+      url: 'u',
+      mergedAt: null,
+      closedAt: null,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      isCrossRepository: false,
+    };
+    for (const pr of [
+      { ...base, state: 'OPEN' as const },
+      { ...base, state: 'CLOSED' as const },
+      { status: 'none' as const },
+      { status: 'unknown' as const, reason: 'offline' },
+    ]) {
+      assert.equal(
+        planRemoval(makeWorktree({ pr }), { cwd: EXTERNAL_CWD }).branchDeleteSafe,
+        false,
+      );
+    }
+  });
 });
