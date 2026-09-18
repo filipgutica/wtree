@@ -103,8 +103,14 @@ export interface RemovalResult {
   branchError: string | null;
 }
 
+/** Emitted around each removal so a caller can show progress on a long batch. */
+export type ExecuteEvent =
+  | { phase: 'start'; index: number; total: number; path: string }
+  | { phase: 'done'; index: number; total: number; path: string; result: RemovalResult };
+
 export interface ExecuteOptions {
   repo: RepoContext;
+  onProgress?: (event: ExecuteEvent) => void;
   force?: boolean;
   /** Use `git branch -D` for every branch, not just the ones with a merged PR. */
   forceBranchDelete?: boolean;
@@ -116,13 +122,15 @@ export interface ExecuteOptions {
  */
 export const execute = async (
   plans: Plan[],
-  { repo, force = false, forceBranchDelete = false }: ExecuteOptions,
+  { repo, force = false, forceBranchDelete = false, onProgress }: ExecuteOptions,
 ): Promise<RemovalResult[]> => {
   const results: RemovalResult[] = [];
+  const runnable = plans.filter((plan) => plan.blocks.length === 0);
+  const total = runnable.length;
 
-  for (const plan of plans) {
-    if (plan.blocks.length > 0) continue;
+  for (const [index, plan] of runnable.entries()) {
     const { worktree } = plan;
+    onProgress?.({ phase: 'start', index, total, path: worktree.path });
 
     const args = ['worktree', 'remove'];
     if (force) {
@@ -152,6 +160,7 @@ export const execute = async (
     }
 
     results.push(result);
+    onProgress?.({ phase: 'done', index, total, path: worktree.path, result });
   }
 
   return results;

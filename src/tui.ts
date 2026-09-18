@@ -1,7 +1,13 @@
 import { emitKeypressEvents } from 'node:readline';
 import type { Key } from 'node:readline';
 
-import { execute, planRemoval, type Plan, type RemovalResult } from './clean.js';
+import {
+  execute,
+  planRemoval,
+  type ExecuteEvent,
+  type Plan,
+  type RemovalResult,
+} from './clean.js';
 import type { Collection } from './enrich.js';
 import type { RepoContext } from './git.js';
 import { ageDays, prStateOf, sortWorktrees, type SortKey } from './filter.js';
@@ -31,7 +37,7 @@ export interface TuiOptions {
   reload: (opts: { refresh: boolean; size: boolean }) => Promise<Collection>;
 }
 
-type Screen = 'list' | 'detail' | 'confirm' | 'results';
+type Screen = 'list' | 'detail' | 'confirm' | 'working' | 'results';
 type PrFilter = 'all' | 'merged+closed' | 'open' | 'none';
 
 const SORT_KEYS: readonly SortKey[] = ['age', 'path', 'branch', 'size', 'pr'];
@@ -96,6 +102,7 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
   let deleteBranch = false;
   let pendingTargets: Worktree[] = [];
   let pendingPlans: Plan[] = [];
+  let progressLines: string[] = [];
   let confirmScroll = 0;
   let resultLines: string[] = [];
   let resultScroll = 0;
@@ -388,19 +395,19 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
     stdout.write(`${ESC}2J${ESC}H${clamped.join('\n')}`);
   };
 
-  const renderPaged = (title: string, content: string[], scroll: number): void => {
+  const renderPaged = (
+    title: string,
+    content: string[],
+    scroll: number,
+    hints: [full: string, short: string],
+  ): void => {
     const height = Math.max(1, stdout.rows || 24);
     const capacity = Math.max(1, height - 2);
     const maxScroll = Math.max(0, content.length - capacity);
     const start = Math.min(scroll, maxScroll);
     const lines = [title, ...content.slice(start, start + capacity - 1)];
     while (lines.length < Math.max(1, height - 1)) lines.push('');
-    lines.push(
-      fit(
-        'j/k or arrows scroll  y confirm where offered  b toggle branches  Esc cancel  q quit',
-        'j/k scroll  y confirm  b branches  Esc cancel  q quit',
-      ),
-    );
+    lines.push(fit(hints[0], hints[1]));
     stdout.write(`${ESC}2J${ESC}H${clampLines(lines).join('\n')}`);
   };
 
@@ -411,7 +418,10 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
         break;
       case 'detail': {
         const wt = currentWorktree();
-        renderPaged('wtree — worktree detail', wt ? detailLines(wt) : ['no worktree selected'], 0);
+        renderPaged('wtree — worktree detail', wt ? detailLines(wt) : ['no worktree selected'], 0, [
+          'j/k or arrows scroll   Enter or Esc back to the list   q quit',
+          'j/k scroll  Esc back  q quit',
+        ]);
         break;
       }
       case 'confirm': {
@@ -425,11 +435,26 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
           '',
           ...renderPlanLines(pendingPlans),
         ];
-        renderPaged('wtree — confirmation', content, confirmScroll);
+        const count = pendingPlans.filter((plan) => plan.blocks.length === 0).length;
+        const noun = `${count} worktree${count === 1 ? '' : 's'}`;
+        const branches = deleteBranch ? ' and their branches' : '';
+        renderPaged('wtree — confirmation', content, confirmScroll, [
+          `${paint(`Press y to remove ${noun}${branches}`, 'bold')}   Esc cancel   b toggle branch deletion   j/k scroll`,
+          `${paint(`y remove ${count}`, 'bold')}  Esc cancel  b branches`,
+        ]);
         break;
       }
+      case 'working':
+        renderPaged('wtree — removing', progressLines, Math.max(0, progressLines.length - 1), [
+          'working — please wait',
+          'working…',
+        ]);
+        break;
       case 'results':
-        renderPaged('wtree — deletion results', resultLines, resultScroll);
+        renderPaged('wtree — deletion results', resultLines, resultScroll, [
+          'any key returns to the list   q quit',
+          'any key back  q quit',
+        ]);
         break;
     }
   };
@@ -525,8 +550,18 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
       status = 'no worktree is visible to delete';
       return;
     }
+    const plans = targets.map((wt) => planFor(wt));
+    const runnable = plans.filter((plan) => plan.blocks.length === 0);
+    if (runnable.length === 0) {
+      // Offering to remove nothing is not a question worth asking.
+      const reasons = [...new Set(plans.flatMap((plan) => plan.blocks.map((b) => b.message)))];
+      const forceable = plans.some((plan) => plan.blocks.every((block) => block.force));
+      status = `nothing to remove: ${reasons.join('; ')}${forceable ? ' — press f to force' : ''}`;
+      return;
+    }
+
     pendingTargets = targets;
-    pendingPlans = targets.map((wt) => planFor(wt));
+    pendingPlans = plans;
     confirmScroll = 0;
     screen = 'confirm';
     status = null;
@@ -540,17 +575,47 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
 
   const performDeletion = async (): Promise<void> => {
     busy = true;
+    // execute() takes one force flag for the batch, so the forced rows run
+    // as their own batch rather than loosening the rule for everything.
+    const forcedPlans = pendingPlans.filter((plan) => forced.has(plan.worktree.path));
+    const normalPlans = pendingPlans.filter((plan) => !forced.has(plan.worktree.path));
+    const runnable = [...normalPlans, ...forcedPlans].filter((plan) => plan.blocks.length === 0);
+    const total = runnable.length;
+    let completed = 0;
+
+    // Each removal is a separate git call, so without this the UI sits frozen
+    // on the confirmation screen for the whole batch with no sign of progress.
+    const onProgress = (event: ExecuteEvent): void => {
+      if (event.phase === 'start') {
+        progressLines = [
+          ...progressLines.filter((line) => !line.startsWith('\u2026')),
+          `\u2026 removing ${completed + 1}/${total}: ${shortPath(event.path, options.cwd)}`,
+        ];
+      } else {
+        completed += 1;
+        const mark = event.result.removed ? paint('done ', 'green') : paint('failed', 'red');
+        const why = event.result.removed ? '' : ` — ${oneLine(event.result.error ?? 'unknown')}`;
+        progressLines = [
+          ...progressLines.filter((line) => !line.startsWith('\u2026')),
+          `${mark} ${shortPath(event.path, options.cwd)}${why}`,
+        ];
+      }
+      render();
+    };
+
+    progressLines = [`removing ${total} worktree${total === 1 ? '' : 's'}\u2026`, ''];
+    screen = 'working';
+    render();
+
     try {
-      // execute() takes one force flag for the batch, so the forced rows run
-      // as their own batch rather than loosening the rule for everything.
-      const forcedPlans = pendingPlans.filter((plan) => forced.has(plan.worktree.path));
-      const normalPlans = pendingPlans.filter((plan) => !forced.has(plan.worktree.path));
       const results = [
-        ...(await execute(normalPlans, { repo: options.repo, force: false })),
-        ...(await execute(forcedPlans, { repo: options.repo, force: true })),
+        ...(await execute(normalPlans, { repo: options.repo, force: false, onProgress })),
+        ...(await execute(forcedPlans, { repo: options.repo, force: true, onProgress })),
       ];
       let reloadError: string | null = null;
       try {
+        progressLines = [...progressLines, '', paint('reloading worktrees\u2026', 'dim')];
+        render();
         const next = await options.reload({ refresh: false, size: showSize });
         replaceCollection(next, true);
       } catch (error) {
