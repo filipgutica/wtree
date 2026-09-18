@@ -70,6 +70,23 @@ Wraps `git worktree prune`. Shows what it would drop, then asks. Same
 Interactive browser: move, multi-select, filter, and delete. Refuses to start
 when stdout is not a terminal, so it can never hang a script or an agent.
 
+| Key | Action |
+| --- | --- |
+| `j`/`k`, arrows | Move. `g`/`G` jump to top/bottom |
+| `Space` | Select. Refuses a blocked worktree and says why |
+| `f` | **Force select**, overriding dirty, unpushed or locked. Shows `[!]` |
+| `a` / `F` | Select all removable / all force-removable |
+| `c` | Clear the whole selection |
+| `/` | Filter by branch or path. `s` sorts, `p` cycles PR state |
+| `Enter` | Detail pane. `r` refresh, `S` measure sizes |
+| `d` | Delete the selection, with a confirmation screen first |
+| `b` | Toggle branch deletion |
+| `q`, `Esc` | Quit |
+
+`f` cannot override the main worktree or the one you are standing in. The
+confirmation screen marks every forced row `FORCE … [FORCED: reason]` and warns
+in its header that uncommitted work will be lost.
+
 ## What "age" means
 
 Three timestamps are collected and all three are in `--json`:

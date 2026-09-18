@@ -86,6 +86,8 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
   let scrollTop = 0;
   let status: string | null = null;
   let selected = new Set<string>();
+  /** Subset of `selected` that was picked with force, overriding dirty/unpushed/locked. */
+  let forced = new Set<string>();
   let sortKey: SortKey = 'age';
   let prFilter: PrFilter = 'all';
   let pathFilter = '';
@@ -108,27 +110,40 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
     }
   };
 
-  const planFor = (wt: Worktree): Plan =>
+  const planFor = (wt: Worktree, force = forced.has(wt.path)): Plan =>
     planRemoval(wt, {
       cwd: options.cwd,
-      force: false,
+      force,
       deleteBranch,
       requiresPrState: false,
     });
 
-  const isRemovable = (wt: Worktree): boolean => planFor(wt).blocks.length === 0;
+  const isRemovable = (wt: Worktree): boolean => planFor(wt, false).blocks.length === 0;
+
+  /**
+   * Removable once dirty, unpushed and locked are overridden. The main worktree
+   * and the one holding the cwd stay blocked: --force cannot clear those either.
+   */
+  const isForceRemovable = (wt: Worktree): boolean => planFor(wt, true).blocks.length === 0;
 
   const pruneSelection = (): void => {
     const current = new Map(collection.worktrees.map((wt) => [wt.path, wt]));
     for (const path of selected) {
       const wt = current.get(path);
-      if (!wt || !isRemovable(wt)) selected.delete(path);
+      const ok = wt && (forced.has(path) ? isForceRemovable(wt) : isRemovable(wt));
+      if (!ok) {
+        selected.delete(path);
+        forced.delete(path);
+      }
     }
   };
 
   const replaceCollection = (next: Collection, clearSelection: boolean): void => {
     collection = next;
-    if (clearSelection) selected = new Set<string>();
+    if (clearSelection) {
+      selected = new Set<string>();
+      forced = new Set<string>();
+    }
     else pruneSelection();
     const visible = getVisibleWorktrees();
     if (visible.length === 0) cursor = 0;
@@ -170,7 +185,51 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
   const selectAllRemovable = (): void => {
     const visible = getVisibleWorktrees();
     selected = new Set(visible.filter(isRemovable).map((wt) => wt.path));
+    forced = new Set<string>();
     status = `${selected.size} removable worktree${selected.size === 1 ? '' : 's'} selected`;
+  };
+
+  /** Select everything that only force can unblock, plus everything already removable. */
+  const forceSelectAll = (): void => {
+    const visible = getVisibleWorktrees().filter(isForceRemovable);
+    selected = new Set(visible.map((wt) => wt.path));
+    forced = new Set(visible.filter((wt) => !isRemovable(wt)).map((wt) => wt.path));
+    status =
+      forced.size > 0
+        ? `${selected.size} selected, ${forced.size} forced (dirty, unpushed or locked)`
+        : `${selected.size} removable worktree${selected.size === 1 ? '' : 's'} selected`;
+  };
+
+  const toggleCurrentForce = (): void => {
+    const wt = currentWorktree();
+    if (!wt) {
+      status = 'no worktree is visible';
+      return;
+    }
+    if (selected.has(wt.path)) {
+      selected.delete(wt.path);
+      forced.delete(wt.path);
+      status = `unselected ${shortPath(wt.path, options.cwd)}`;
+      return;
+    }
+    const hard = planFor(wt, true).blocks;
+    if (hard.length > 0) {
+      // main and cwd are not forceable, so say so rather than pretending f helps.
+      status = `cannot force ${shortPath(wt.path, options.cwd)}: ${hard
+        .map((block) => block.message)
+        .join('; ')}`;
+      return;
+    }
+    selected.add(wt.path);
+    const overrides = planFor(wt, true).overridden;
+    if (overrides.length > 0) {
+      forced.add(wt.path);
+      status = `force selected ${shortPath(wt.path, options.cwd)} (${overrides
+        .map((block) => block.message)
+        .join('; ')})`;
+    } else {
+      status = `selected ${shortPath(wt.path, options.cwd)}`;
+    }
   };
 
   const toggleCurrentSelection = (): void => {
@@ -179,15 +238,17 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
       status = 'no worktree is visible';
       return;
     }
-    const plan = planFor(wt);
+    const plan = planFor(wt, false);
     if (plan.blocks.length > 0) {
+      const forceable = plan.blocks.every((block) => block.force);
       status = `cannot select ${shortPath(wt.path, options.cwd)}: ${plan.blocks
         .map((block) => block.message)
-        .join('; ')}`;
+        .join('; ')}${forceable ? ' — press f to force' : ''}`;
       return;
     }
     if (selected.has(wt.path)) {
       selected.delete(wt.path);
+      forced.delete(wt.path);
       status = `unselected ${shortPath(wt.path, options.cwd)}`;
     } else {
       selected.add(wt.path);
@@ -251,7 +312,11 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
   const listRows = (visible: Worktree[]): string[][] =>
     visible.map((wt, index) => {
       const marker = index === cursor ? paint('>', 'cyan') : ' ';
-      const checkbox = selected.has(wt.path) ? paint('[x]', 'green') : '[ ]';
+      const checkbox = forced.has(wt.path)
+        ? paint('[!]', 'red')
+        : selected.has(wt.path)
+          ? paint('[x]', 'green')
+          : '[ ]';
       return [
         marker,
         checkbox,
@@ -299,13 +364,14 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
     const firstRow = Math.max(0, scrollTop) + 1;
     const shownRows = tableLines.slice(firstRow, firstRow + rowCapacity);
     const removable = collection.worktrees.filter(isRemovable).length;
-    const header = `wtree — ${options.repo.root} — ${visible.length}/${collection.worktrees.length} shown, ${removable} removable, ${selected.size} selected`;
+    const forcedNote = forced.size > 0 ? `, ${forced.size} forced` : '';
+    const header = `wtree — ${options.repo.root} — ${visible.length}/${collection.worktrees.length} shown, ${removable} removable, ${selected.size} selected${forcedNote}`;
     const filterLine = `sort: ${sortKey}  PR: ${prFilter}  filter: ${
       filterMode ? `/${filterDraft}_` : pathFilter || 'none'
     }  age: ${options.ageBasis}  delete branches: ${deleteBranch ? 'on' : 'off'}`;
     const footer = fit(
-      'j/k or arrows move  g/G top/bottom  Space select  a all removable  A/c clear  / filter  s sort  p PR  r refresh  S size  Enter details  d delete  b branches  q/Esc quit',
-      'j/k move  Space select  a all  / filter  s sort  p PR  r refresh  Enter details  d delete  q quit',
+      'j/k move  g/G top/bottom  Space select  f force  a select all  F force all  c clear all  / filter  s sort  p PR  r refresh  S size  Enter details  d delete  b branches  q/Esc quit',
+      'j/k move  Space select  f force  a all  F force all  c clear  / filter  d delete  q quit',
     );
     const footerStatus = status ?? '';
     const headerLines = [header, filterLine, legend(), tableLines[0] ?? ''];
@@ -351,7 +417,9 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
       case 'confirm': {
         const content = [
           paint(
-            `DELETE WORKTREES — also delete branches: ${deleteBranch ? 'YES' : 'NO'}`,
+            `DELETE WORKTREES — also delete branches: ${deleteBranch ? 'YES' : 'NO'}${
+              forced.size > 0 ? `  —  ${forced.size} FORCED, uncommitted work will be lost` : ''
+            }`,
             'bold',
           ),
           '',
@@ -374,11 +442,18 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
     for (const plan of removable) {
       const wt = plan.worktree;
       const branch = plan.removeBranch ? ` + branch ${plan.removeBranch}` : '';
+      const override =
+        plan.overridden.length > 0
+          ? ` ${paint(`[FORCED: ${plan.overridden.map((b) => b.message).join('; ')}]`, 'red')}`
+          : '';
       lines.push(
-        `  ${paint('REMOVE', 'red')} ${shortPath(wt.path, options.cwd)}${branch} ${paint(
+        `  ${paint(plan.overridden.length > 0 ? 'FORCE ' : 'REMOVE', 'red')} ${shortPath(
+          wt.path,
+          options.cwd,
+        )}${branch} ${paint(
           `(${formatAge(ageDays(wt, options.ageBasis))}, ${prStateOf(wt)})`,
           'dim',
-        )}`,
+        )}${override}`,
       );
     }
     lines.push('', `skipped: ${skipped.length}`);
@@ -451,7 +526,7 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
       return;
     }
     pendingTargets = targets;
-    pendingPlans = targets.map(planFor);
+    pendingPlans = targets.map((wt) => planFor(wt));
     confirmScroll = 0;
     screen = 'confirm';
     status = null;
@@ -459,14 +534,21 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
 
   const togglePendingBranchDeletion = (): void => {
     deleteBranch = !deleteBranch;
-    pendingPlans = pendingTargets.map(planFor);
+    pendingPlans = pendingTargets.map((wt) => planFor(wt));
     confirmScroll = 0;
   };
 
   const performDeletion = async (): Promise<void> => {
     busy = true;
     try {
-      const results = await execute(pendingPlans, { repo: options.repo, force: false });
+      // execute() takes one force flag for the batch, so the forced rows run
+      // as their own batch rather than loosening the rule for everything.
+      const forcedPlans = pendingPlans.filter((plan) => forced.has(plan.worktree.path));
+      const normalPlans = pendingPlans.filter((plan) => !forced.has(plan.worktree.path));
+      const results = [
+        ...(await execute(normalPlans, { repo: options.repo, force: false })),
+        ...(await execute(forcedPlans, { repo: options.repo, force: true })),
+      ];
       let reloadError: string | null = null;
       try {
         const next = await options.reload({ refresh: false, size: showSize });
@@ -566,9 +648,21 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
       render();
       return;
     }
+    if (str === 'f') {
+      toggleCurrentForce();
+      render();
+      return;
+    }
+    if (str === 'F' || isUpper(key, 'f')) {
+      forceSelectAll();
+      render();
+      return;
+    }
     if (str === 'c' || str === 'A' || isUpper(key, 'a')) {
+      const had = selected.size;
       selected.clear();
-      status = 'selection cleared';
+      forced.clear();
+      status = had > 0 ? `cleared ${had} selection${had === 1 ? '' : 's'}` : 'nothing was selected';
       render();
       return;
     }

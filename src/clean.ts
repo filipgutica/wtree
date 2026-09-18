@@ -125,7 +125,12 @@ export const execute = async (
     const { worktree } = plan;
 
     const args = ['worktree', 'remove'];
-    if (force) args.push('--force');
+    if (force) {
+      args.push('--force');
+      // git needs --force twice to remove a locked worktree: once for the lock,
+      // once for whatever else (a dirty tree) it would have refused anyway.
+      if (worktree.locked) args.push('--force');
+    }
     args.push(worktree.path);
     const removal = await git(args, repo.root);
 
