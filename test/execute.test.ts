@@ -106,9 +106,10 @@ describe('execute', () => {
 
   // `git worktree remove` validates the path is still a worktree, so it refuses a
   // prunable record whose .git file is gone even though the directory survives.
-  it('prunes a stale record whose .git file is gone, and says the directory remains', async () => {
+  it('prunes a stale record and deletes the leftover directory', async () => {
     const path = join(root, 'broke1');
     git(['worktree', 'add', '-q', '-b', 'broke1', path], main);
+    writeFileSync(join(path, 'leftover.txt'), 'x');
     rmSync(join(path, '.git'));
 
     const wt = await worktreeAt(path);
@@ -116,13 +117,63 @@ describe('execute', () => {
 
     const [result] = await execute([planRemoval(wt, { cwd: main })], { repo });
     assert.equal(result?.removed, true, result?.error ?? '');
-    assert.match(result?.note ?? '', /still on disk/);
-    assert.equal(existsSync(path), true, 'the directory is the user\'s, not git\'s');
+    assert.match(result?.note ?? '', /deleted the leftover directory/);
+    assert.equal(existsSync(path), false);
     assert.equal(
       (await listWorktrees(main)).some((w) => w.path === path),
       false,
       'the record must be gone',
     );
+  });
+
+  it('keeps the leftover directory when asked', async () => {
+    const path = join(root, 'broke2');
+    git(['worktree', 'add', '-q', '-b', 'broke2', path], main);
+    rmSync(join(path, '.git'));
+
+    const plan = planRemoval(await worktreeAt(path), { cwd: main });
+    const [result] = await execute([plan], { repo, keepDirectory: true });
+    assert.equal(result?.removed, true, result?.error ?? '');
+    assert.match(result?.note ?? '', /left the directory on disk/);
+    assert.equal(existsSync(path), true);
+    rmSync(path, { recursive: true, force: true });
+  });
+
+  // The record is what proves the path was ever a worktree. If the directory
+  // still looks like a live checkout, the record is stale in some other way and
+  // deleting the tree would be guessing.
+  it('refuses to delete a directory that still has a .git entry', async () => {
+    const path = join(root, 'broke3');
+    git(['worktree', 'add', '-q', '-b', 'broke3', path], main);
+    const wt = await worktreeAt(path);
+    // Break the admin pointer, not the checkout, so the record reads prunable
+    // while the directory is still a perfectly good tree.
+    const forged = { ...wt, prunable: true, missing: false };
+
+    const [result] = await execute([planRemoval(forged, { cwd: main })], { repo });
+    assert.equal(result?.removed, true, result?.error ?? '');
+    assert.match(result?.note ?? '', /still has a \.git entry/);
+    assert.equal(existsSync(join(path, '.git')), true, 'the checkout must survive');
+    rmSync(path, { recursive: true, force: true });
+  });
+
+  // A stale record pointing at an ancestor of the repo would take the repo with it.
+  it('refuses to delete a directory that contains the repo', async () => {
+    const path = join(root, 'guard1');
+    git(['worktree', 'add', '-q', '-b', 'guard1', path], main);
+    const wt = await worktreeAt(path);
+    const pointsAtParent = { ...wt, path: root, prunable: true, missing: false };
+
+    // Plan from outside the tree, so the "you are inside it" block does not fire
+    // first and we actually exercise the directory guard.
+    const outside = tmpdir();
+    const plan = planRemoval(pointsAtParent, { cwd: outside });
+    assert.deepEqual(plan.blocks, [], 'the plan must reach execute for this to test anything');
+
+    const [result] = await execute([plan], { repo });
+    assert.match(result?.note ?? '', /it contains/);
+    assert.equal(existsSync(main), true, 'the repo must survive');
+    assert.equal(existsSync(path), true);
   });
 
   it('prunes a record whose directory vanished, with no note', async () => {

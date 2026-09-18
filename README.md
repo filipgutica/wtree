@@ -60,6 +60,18 @@ not block on a prompt nobody can answer, and it will not delete unasked.
 `clean` refuses to run without a filter. Pass `--all` if you really mean every
 non-main worktree.
 
+### Prunable worktrees
+
+A worktree is *prunable* (`P`) when git can no longer validate it: its `.git`
+file, or its whole directory, is gone. `git worktree remove` refuses those, so
+`wtree` drops the record under `.git/worktrees` instead, one record at a time.
+
+If the directory survived, `wtree` deletes it too, because reclaiming that space
+is the point. It does that **before** pruning the record, while git's own
+bookkeeping still vouches for the path. It refuses to delete a directory that
+contains the repo, the current directory, or a live `.git` entry, and
+`--keep-directory` turns the deletion off.
+
 ### `wtree prune`
 
 Wraps `git worktree prune`. Shows what it would drop, then asks. Same

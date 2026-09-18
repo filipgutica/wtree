@@ -230,6 +230,10 @@ const cleanCommand = withFilterOptions(
     .option('--force', 'override dirty, unpushed and locked (never main or cwd)')
     .option('--delete-branch', 'also delete the branch of each removed worktree')
     .option('--force-branch-delete', 'use git branch -D instead of -d')
+    .option(
+      '--keep-directory',
+      'when pruning a stale worktree, leave its leftover directory on disk',
+    )
     .option('--all', 'act on every non-main worktree (required when no filter is given)')
     .option('--json', 'machine readable plan and results'),
 );
@@ -242,6 +246,7 @@ cleanCommand.action(
       force?: boolean;
       deleteBranch?: boolean;
       forceBranchDelete?: boolean;
+      keepDirectory?: boolean;
       all?: boolean;
       json?: boolean;
     },
@@ -335,6 +340,7 @@ cleanCommand.action(
       repo,
       force: opts.force === true,
       forceBranchDelete: opts.forceBranchDelete === true,
+      keepDirectory: opts.keepDirectory === true,
     });
 
     if (opts.json) {

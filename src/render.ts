@@ -218,6 +218,10 @@ export const renderPlan = (plans: Plan[], cwd: string, ageBasis: AgeBasis): stri
         prStateOf(wt),
         ...(wt.sizeKb !== null ? [formatSize(wt.sizeKb)] : []),
       ].join(', ');
+      const leftover =
+        wt.prunable && !wt.missing
+          ? paint(' + leftover directory', 'yellow')
+          : '';
       const branch = plan.removeBranch
         ? paint(
             ` +branch ${plan.removeBranch}${plan.branchDeleteSafe ? '' : ' (only if merged)'}`,
@@ -229,7 +233,7 @@ export const renderPlan = (plans: Plan[], cwd: string, ageBasis: AgeBasis): stri
           ? paint(` [forced: ${plan.overridden.map((b) => b.code).join(', ')}]`, 'red')
           : '';
       lines.push(
-        `  ${paint('-', 'red')} ${shortPath(wt.path, cwd)} ${paint(`(${extras})`, 'dim')}${branch}${over}`,
+        `  ${paint('-', 'red')} ${shortPath(wt.path, cwd)} ${paint(`(${extras})`, 'dim')}${leftover}${branch}${over}`,
       );
     }
   }

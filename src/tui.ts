@@ -467,6 +467,8 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
     for (const plan of removable) {
       const wt = plan.worktree;
       const branch = plan.removeBranch ? ` + branch ${plan.removeBranch}` : '';
+      const leftover =
+        wt.prunable && !wt.missing ? paint(' + leftover directory', 'yellow') : '';
       const override =
         plan.overridden.length > 0
           ? ` ${paint(`[FORCED: ${plan.overridden.map((b) => b.message).join('; ')}]`, 'red')}`
@@ -475,7 +477,7 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
         `  ${paint(plan.overridden.length > 0 ? 'FORCE ' : 'REMOVE', 'red')} ${shortPath(
           wt.path,
           options.cwd,
-        )}${branch} ${paint(
+        )}${branch}${leftover} ${paint(
           `(${formatAge(ageDays(wt, options.ageBasis))}, ${prStateOf(wt)})`,
           'dim',
         )}${override}`,

@@ -1,4 +1,6 @@
-import { rm } from 'node:fs/promises';
+import { readdir, rm, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { dirname, resolve, sep } from 'node:path';
 import { git } from './exec.js';
 import { isPathInside, type RepoContext } from './git.js';
 import type { Worktree } from './types.js';
@@ -117,6 +119,8 @@ export interface ExecuteOptions {
   force?: boolean;
   /** Use `git branch -D` for every branch, not just the ones with a merged PR. */
   forceBranchDelete?: boolean;
+  /** Prune a stale record but leave its directory on disk. */
+  keepDirectory?: boolean;
 }
 
 /**
@@ -125,7 +129,7 @@ export interface ExecuteOptions {
  */
 export const execute = async (
   plans: Plan[],
-  { repo, force = false, forceBranchDelete = false, onProgress }: ExecuteOptions,
+  { repo, force = false, forceBranchDelete = false, keepDirectory = false, onProgress }: ExecuteOptions,
 ): Promise<RemovalResult[]> => {
   const results: RemovalResult[] = [];
   const runnable = plans.filter((plan) => plan.blocks.length === 0);
@@ -151,7 +155,7 @@ export const execute = async (
       // directory is gone. Dropping the record under .git/worktrees is exactly
       // what `git worktree prune` does, scoped to this one entry so the other
       // prunable records are left alone.
-      const removed = await pruneRecord(worktree);
+      const removed = await pruneRecord(worktree, repo, keepDirectory);
       result.removed = removed.ok;
       result.error = removed.ok ? null : removed.reason;
       result.note = removed.ok ? removed.note : null;
@@ -190,29 +194,91 @@ type PruneOutcome =
   | { ok: false; reason: string };
 
 /**
+ * Whether it is safe to delete a leftover worktree directory.
+ *
+ * The path comes from git's own worktree record, so it was created by
+ * `git worktree add` and deleting it is what `remove` would have done. These
+ * checks exist for the cases where that record has gone stale in a way that
+ * would make the delete catastrophic rather than merely wrong.
+ */
+const canDeleteDirectory = async (
+  path: string,
+  repo: RepoContext,
+): Promise<{ ok: true } | { ok: false; reason: string }> => {
+  const target = resolve(path);
+
+  if (target === sep || target === resolve(homedir()) || dirname(target) === target) {
+    return { ok: false, reason: 'refusing to delete a root or home directory' };
+  }
+  // An ancestor of the repo, or of the common git dir, would take them with it.
+  for (const guarded of [repo.root, repo.commonDir, process.cwd()]) {
+    const g = resolve(guarded);
+    if (g === target || g.startsWith(target.endsWith(sep) ? target : target + sep)) {
+      return { ok: false, reason: `it contains ${guarded}` };
+    }
+  }
+  try {
+    if (!(await stat(target)).isDirectory()) {
+      return { ok: false, reason: 'not a directory' };
+    }
+    // A live .git means git should have been able to remove it normally, so the
+    // record is not stale in the way we think it is. Do not guess.
+    const entries = await readdir(target);
+    if (entries.includes('.git')) {
+      return { ok: false, reason: 'it still has a .git entry' };
+    }
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+  }
+  return { ok: true };
+};
+
+/**
  * Drop one stale worktree record. `git worktree prune` has no per-path form, so
  * pruning through it would also drop every other prunable record in the repo -
  * more than the caller selected. Removing this record's directory under
  * .git/worktrees is the same operation, scoped to one entry.
  */
-const pruneRecord = async (worktree: Plan['worktree']): Promise<PruneOutcome> => {
+const pruneRecord = async (
+  worktree: Plan['worktree'],
+  repo: RepoContext,
+  keepDirectory: boolean,
+): Promise<PruneOutcome> => {
   if (!worktree.adminDir) {
     return { ok: false, reason: 'no worktree record to prune' };
   }
+
+  let note: string | null = null;
+
+  // Delete the directory before the record, while git's own bookkeeping still
+  // vouches for the path. Once the record is pruned there is nothing left to
+  // prove this directory was ever a worktree of this repo.
+  if (!worktree.missing) {
+    if (keepDirectory) {
+      note = `left the directory on disk at ${worktree.path}`;
+    } else {
+      const check = await canDeleteDirectory(worktree.path, repo);
+      if (!check.ok) {
+        note = `left the directory on disk at ${worktree.path}: ${check.reason}`;
+      } else {
+        try {
+          await rm(worktree.path, { recursive: true, force: true });
+          note = 'pruned the stale record and deleted the leftover directory';
+        } catch (error) {
+          const why = error instanceof Error ? error.message : String(error);
+          note = `left the directory on disk at ${worktree.path}: ${why}`;
+        }
+      }
+    }
+  }
+
   try {
     await rm(worktree.adminDir, { recursive: true, force: true });
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : String(error) };
   }
-  // The record is what git owns. A directory still sitting on disk is the
-  // user's, so say it is there rather than deleting it behind their back.
-  const stillThere = !worktree.missing;
-  return {
-    ok: true,
-    note: stillThere
-      ? `pruned the stale record; the directory is still on disk at ${worktree.path}`
-      : null,
-  };
+
+  return { ok: true, note };
 };
 
 /** `git worktree prune`: drop admin records whose directory is gone. */
