@@ -44,22 +44,26 @@ wtree --json                           # machine readable
 
 ### `wtree clean`
 
-Removes worktrees matching the filters. **Dry run by default** — nothing is
-deleted until you pass `--yes`.
+Removes worktrees matching the filters. It always prints the plan first and asks
+before touching anything.
 
 ```sh
-wtree clean --pr-state merged,closed --older-than 3mo          # show the plan
-wtree clean --pr-state merged,closed --older-than 3mo --yes    # do it
-wtree clean --prunable --yes                                   # drop dead ones
-wtree clean --pr-state merged --yes --delete-branch            # also delete branches
+wtree clean --pr-state merged,closed --older-than 3mo    # plan, then "Remove 3 worktrees? [y/N]"
+wtree clean --prunable -n                                # -n / --dry-run: plan only, never asks
+wtree clean --pr-state merged -y --delete-branch         # -y / --yes: no prompt, for scripts
 ```
+
+With no terminal to ask at (a pipe, a script, an agent, or `--json`), `clean`
+prints the plan and exits **2** unless you passed `--yes` or `--dry-run`. It will
+not block on a prompt nobody can answer, and it will not delete unasked.
 
 `clean` refuses to run without a filter. Pass `--all` if you really mean every
 non-main worktree.
 
 ### `wtree prune`
 
-Wraps `git worktree prune`. Dry run unless `--yes`.
+Wraps `git worktree prune`. Shows what it would drop, then asks. Same
+`--dry-run` / `--yes` rules as `clean`.
 
 ### `wtree ui`
 
@@ -115,7 +119,7 @@ so the `✓` flag (`mergedIntoDefault`) misses them. PR state is the signal to t
 | --- | --- |
 | 0 | success (including a dry run with nothing to do) |
 | 1 | one or more removals failed |
-| 2 | bad usage, bad filter, or not a git repository |
+| 2 | bad usage, bad filter, not a git repository, or no terminal to confirm at |
 | 3 | a PR-state filter was requested but PR state is unavailable |
 
 ## For agents
@@ -125,9 +129,11 @@ doing anything. The intended shape of "clean up my merged worktrees older than
 three months" is a single composable command, not parsed prose:
 
 ```sh
-wtree clean --pr-state merged,closed --older-than 3mo --json          # plan only
-wtree clean --pr-state merged,closed --older-than 3mo --yes --json    # execute
+wtree clean --pr-state merged,closed --older-than 3mo --dry-run --json   # plan only
+wtree clean --pr-state merged,closed --older-than 3mo --yes --json       # execute
 ```
+
+`--json` never prompts, so it needs `--dry-run` or `--yes` explicitly.
 
 The plan JSON gives, per worktree, `willRemove`, `blockedBy[]` (with a `forceable`
 flag per block), and `overriddenByForce[]`. Show the plan, get confirmation, then

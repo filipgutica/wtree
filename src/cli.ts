@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createInterface } from 'node:readline/promises';
 import { Command, InvalidArgumentError } from 'commander';
 import { collect, type Collection } from './enrich.js';
 import { execute, planAll, prune, type Plan } from './clean.js';
@@ -139,6 +140,20 @@ const warnPrUnavailable = (collection: Collection, quiet: boolean): void => {
   );
 };
 
+/**
+ * Ask before removing. Only reached on a terminal: without one there is nobody
+ * to answer, so the caller must have said --yes or --dry-run up front.
+ */
+const confirm = async (question: string): Promise<boolean> => {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const answer = await rl.question(`${question} [y/N] `);
+    return answer.trim().toLowerCase() === 'y';
+  } finally {
+    rl.close();
+  }
+};
+
 const program = new Command();
 
 program
@@ -210,7 +225,8 @@ const cleanCommand = withFilterOptions(
   program
     .command('clean')
     .description('remove worktrees matching the filters (dry run unless --yes)')
-    .option('--yes', 'actually remove; without it this is a dry run')
+    .option('-n, --dry-run', 'show the plan and stop')
+    .option('-y, --yes', 'skip the confirmation prompt')
     .option('--force', 'override dirty, unpushed and locked (never main or cwd)')
     .option('--delete-branch', 'also delete the branch of each removed worktree')
     .option('--force-branch-delete', 'use git branch -D instead of -d')
@@ -222,6 +238,7 @@ cleanCommand.action(
   async (
     opts: FilterOptions & {
       yes?: boolean;
+      dryRun?: boolean;
       force?: boolean;
       deleteBranch?: boolean;
       forceBranchDelete?: boolean;
@@ -274,32 +291,44 @@ cleanCommand.action(
     });
     const removable = plans.filter((p: Plan) => p.blocks.length === 0);
 
-    if (!opts.yes) {
+    const showPlan = (dryRun: boolean): void => {
       if (opts.json) {
-        process.stdout.write(
-          `${JSON.stringify({ dryRun: true, plan: planToJson(plans) }, null, 2)}\n`,
-        );
+        process.stdout.write(`${JSON.stringify({ dryRun, plan: planToJson(plans) }, null, 2)}\n`);
         return;
       }
       warnPrUnavailable(collection, false);
       process.stdout.write(`${renderPlan(plans, cwd, globals.ageBy)}\n`);
-      if (removable.length > 0) {
-        process.stdout.write(
-          `\n${paint('dry run. re-run with --yes to remove them.', 'dim')}\n`,
-        );
+    };
+
+    if (opts.dryRun || removable.length === 0) {
+      showPlan(true);
+      if (!opts.json && !opts.dryRun && removable.length === 0) return;
+      if (!opts.json && removable.length > 0) {
+        process.stdout.write(`\n${paint('dry run. drop --dry-run to remove them.', 'dim')}\n`);
       }
       return;
     }
 
-    if (removable.length === 0) {
-      if (opts.json) {
-        process.stdout.write(
-          `${JSON.stringify({ dryRun: false, plan: planToJson(plans), results: [] }, null, 2)}\n`,
+    if (!opts.yes) {
+      // Prompting needs someone to answer. In a script, a pipeline or an agent
+      // there is nobody, so refuse rather than block forever or delete unasked.
+      if (!process.stdin.isTTY || !process.stdout.isTTY || opts.json) {
+        showPlan(true);
+        process.stderr.write(
+          'wtree: refusing to remove without confirmation. Pass --yes to remove, or --dry-run to just see the plan.\n',
         );
+        process.exitCode = 2;
         return;
       }
-      process.stdout.write(`${renderPlan(plans, cwd, globals.ageBy)}\n`);
-      return;
+      showPlan(false);
+      const branchNote = opts.deleteBranch ? ' and their branches' : '';
+      const ok = await confirm(
+        `\nRemove ${removable.length} worktree${removable.length === 1 ? '' : 's'}${branchNote}?`,
+      );
+      if (!ok) {
+        process.stdout.write(`${paint('cancelled.', 'dim')}\n`);
+        return;
+      }
     }
 
     const results = await execute(plans, {
@@ -334,19 +363,36 @@ cleanCommand.action(
 program
   .command('prune')
   .description('drop admin records for worktrees whose directory is gone')
-  .option('--yes', 'actually prune; without it this is a dry run')
-  .action(async (opts: { yes?: boolean }) => {
+  .option('-n, --dry-run', 'show what would be pruned and stop')
+  .option('-y, --yes', 'skip the confirmation prompt')
+  .action(async (opts: { yes?: boolean; dryRun?: boolean }) => {
     const globals = program.opts<GlobalOptions>();
     const repo = await getRepoContext(await realpathSafe(resolveCwd(globals)));
-    const output = await prune(repo, opts.yes !== true);
-    if (output) {
-      process.stdout.write(`${output}\n`);
-    } else {
+
+    const preview = await prune(repo, true);
+    if (!preview) {
       process.stdout.write(`${paint('nothing to prune.', 'dim')}\n`);
+      return;
     }
-    if (!opts.yes && output) {
-      process.stdout.write(`${paint('dry run. re-run with --yes to prune.', 'dim')}\n`);
+    process.stdout.write(`${preview}\n`);
+
+    if (opts.dryRun) {
+      process.stdout.write(`${paint('dry run. drop --dry-run to prune.', 'dim')}\n`);
+      return;
     }
+    if (!opts.yes) {
+      if (!process.stdin.isTTY || !process.stdout.isTTY) {
+        process.stderr.write('wtree: refusing to prune without confirmation. Pass --yes.\n');
+        process.exitCode = 2;
+        return;
+      }
+      if (!(await confirm('\nPrune these records?'))) {
+        process.stdout.write(`${paint('cancelled.', 'dim')}\n`);
+        return;
+      }
+    }
+    const output = await prune(repo, false);
+    if (output) process.stdout.write(`${output}\n`);
   });
 
 program
