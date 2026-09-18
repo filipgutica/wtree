@@ -11,6 +11,7 @@ import {
   formatAge,
   formatPr,
   formatSize,
+  legend,
   paint,
   shortPath,
   visibleWidth,
@@ -263,7 +264,8 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
   const renderList = (): void => {
     const visible = getVisibleWorktrees();
     const height = Math.max(1, stdout.rows || 24);
-    const rowCapacity = Math.max(0, height - 5);
+    // header, filters, legend, table header, footer, status.
+    const rowCapacity = Math.max(0, height - 6);
     if (visible.length === 0) cursor = 0;
     else cursor = Math.min(cursor, visible.length - 1);
     const maxScroll = Math.max(0, visible.length - rowCapacity);
@@ -286,7 +288,7 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
     const footer =
       'j/k or arrows move  g/G top/bottom  Space select  a all removable  A/c clear  / filter  s sort  p PR  r refresh  S size  Enter details  d delete  b branches  q/Esc quit';
     const footerStatus = status ?? '';
-    const lines = [header, filterLine, tableLines[0] ?? '', ...shownRows];
+    const lines = [header, filterLine, legend(), tableLines[0] ?? '', ...shownRows];
     while (lines.length < Math.max(0, height - 2)) lines.push('');
     lines.push(footer, footerStatus);
     stdout.write(`${ESC}2J${ESC}H${lines.join('\n')}`);
