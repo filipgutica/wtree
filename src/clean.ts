@@ -1,0 +1,157 @@
+import { git } from './exec.js';
+import { isPathInside, type RepoContext } from './git.js';
+import type { Worktree } from './types.js';
+
+/** A reason a worktree must not be removed. `force` says whether --force clears it. */
+export interface Block {
+  code:
+    | 'main'
+    | 'current'
+    | 'locked'
+    | 'dirty'
+    | 'unpushed'
+    | 'pr-unknown';
+  message: string;
+  force: boolean;
+}
+
+export interface Plan {
+  worktree: Worktree;
+  /** Removal proceeds only when this is empty. */
+  blocks: Block[];
+  /** Blocks that `--force` would clear. Empty when nothing is forceable. */
+  overridden: Block[];
+  removeBranch: string | null;
+}
+
+export interface PlanOptions {
+  cwd: string;
+  force?: boolean;
+  deleteBranch?: boolean;
+  /** True when the caller filtered on PR state and so depends on it being known. */
+  requiresPrState?: boolean;
+}
+
+/**
+ * Decide, per worktree, whether removal is allowed and why not.
+ * Every check is evaluated so the printed plan is complete rather than
+ * stopping at the first problem.
+ */
+export const planRemoval = (wt: Worktree, opts: PlanOptions): Plan => {
+  const raw: Block[] = [];
+
+  if (wt.isMain) {
+    raw.push({ code: 'main', message: 'main worktree', force: false });
+  }
+  if (wt.isCurrent || isPathInside(opts.cwd, wt.path)) {
+    raw.push({ code: 'current', message: 'you are inside it', force: false });
+  }
+  if (opts.requiresPrState && wt.pr.status === 'unknown') {
+    // A PR-state filter that cannot be evaluated must never match. Fail closed.
+    raw.push({
+      code: 'pr-unknown',
+      message: `PR state unknown (${wt.pr.reason})`,
+      force: false,
+    });
+  }
+  if (wt.locked) {
+    raw.push({
+      code: 'locked',
+      message: wt.lockReason ? `locked: ${wt.lockReason}` : 'locked',
+      force: true,
+    });
+  }
+  if (wt.dirty) {
+    raw.push({ code: 'dirty', message: 'uncommitted changes', force: true });
+  }
+  if (wt.unpushed !== null && wt.unpushed > 0) {
+    raw.push({
+      code: 'unpushed',
+      message: `${wt.unpushed} unpushed commit${wt.unpushed === 1 ? '' : 's'}`,
+      force: true,
+    });
+  }
+
+  const forcing = opts.force === true;
+  const blocks = forcing ? raw.filter((b) => !b.force) : raw;
+  const overridden = forcing ? raw.filter((b) => b.force) : [];
+
+  return {
+    worktree: wt,
+    blocks,
+    overridden,
+    removeBranch: opts.deleteBranch && wt.branch && !wt.isMain ? wt.branch : null,
+  };
+};
+
+export const planAll = (worktrees: Worktree[], opts: PlanOptions): Plan[] =>
+  worktrees.map((wt) => planRemoval(wt, opts));
+
+export interface RemovalResult {
+  path: string;
+  branch: string | null;
+  removed: boolean;
+  branchDeleted: boolean;
+  error: string | null;
+  branchError: string | null;
+}
+
+export interface ExecuteOptions {
+  repo: RepoContext;
+  force?: boolean;
+  /** Use `git branch -D`, discarding unmerged branch commits. */
+  forceBranchDelete?: boolean;
+}
+
+/**
+ * Remove the worktrees in `plans` that have no blocking reason.
+ * Each removal is independent: one failure does not stop the rest.
+ */
+export const execute = async (
+  plans: Plan[],
+  { repo, force = false, forceBranchDelete = false }: ExecuteOptions,
+): Promise<RemovalResult[]> => {
+  const results: RemovalResult[] = [];
+
+  for (const plan of plans) {
+    if (plan.blocks.length > 0) continue;
+    const { worktree } = plan;
+
+    const args = ['worktree', 'remove'];
+    if (force) args.push('--force');
+    args.push(worktree.path);
+    const removal = await git(args, repo.root);
+
+    const result: RemovalResult = {
+      path: worktree.path,
+      branch: plan.removeBranch,
+      removed: removal.ok,
+      branchDeleted: false,
+      error: removal.ok ? null : removal.stderr.trim() || `git exited ${removal.code}`,
+      branchError: null,
+    };
+
+    // Deleting the branch of a worktree that is still there would orphan the checkout.
+    if (removal.ok && plan.removeBranch) {
+      const del = await git(
+        ['branch', forceBranchDelete ? '-D' : '-d', plan.removeBranch],
+        repo.root,
+      );
+      result.branchDeleted = del.ok;
+      if (!del.ok) result.branchError = del.stderr.trim() || `git exited ${del.code}`;
+    }
+
+    results.push(result);
+  }
+
+  return results;
+};
+
+/** `git worktree prune`: drop admin records whose directory is gone. */
+export const prune = async (repo: RepoContext, dryRun: boolean): Promise<string> => {
+  const args = ['worktree', 'prune', '--verbose'];
+  if (dryRun) args.push('--dry-run');
+  const res = await git(args, repo.root);
+  // git worktree prune reports on stderr, including under --dry-run.
+  return [res.stdout, res.stderr].map((s) => s.trim()).filter(Boolean).join('\n');
+};

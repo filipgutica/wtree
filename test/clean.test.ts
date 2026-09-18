@@ -1,0 +1,99 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import { planRemoval } from '../src/clean.js';
+import { makeWorktree } from './helpers.js';
+
+const EXTERNAL_CWD = '/tmp/elsewhere';
+
+const codes = (plan: ReturnType<typeof planRemoval>): string[] =>
+  plan.blocks.map((block) => block.code);
+
+describe('planRemoval', () => {
+  it('keeps a main-worktree block even with force', () => {
+    const plan = planRemoval(makeWorktree({ isMain: true }), {
+      cwd: EXTERNAL_CWD,
+      force: true,
+    });
+
+    assert.deepEqual(codes(plan), ['main']);
+    assert.deepEqual(plan.overridden, []);
+  });
+
+  it('keeps a current-worktree block for equal and nested cwd paths, even with force', () => {
+    for (const cwd of ['/tmp/repo/wt', '/tmp/repo/wt/src']) {
+      const plan = planRemoval(makeWorktree(), { cwd, force: true });
+      assert.deepEqual(codes(plan), ['current']);
+      assert.deepEqual(plan.overridden, []);
+    }
+
+    const currentFlagPlan = planRemoval(makeWorktree({ isCurrent: true }), {
+      cwd: EXTERNAL_CWD,
+      force: true,
+    });
+    assert.deepEqual(codes(currentFlagPlan), ['current']);
+    assert.deepEqual(currentFlagPlan.overridden, []);
+  });
+
+  it('keeps an unknown PR-state block when the plan requires PR state, even with force', () => {
+    const plan = planRemoval(
+      makeWorktree({ pr: { status: 'unknown', reason: 'x' } }),
+      { cwd: EXTERNAL_CWD, requiresPrState: true, force: true },
+    );
+
+    assert.deepEqual(codes(plan), ['pr-unknown']);
+    assert.deepEqual(plan.overridden, []);
+  });
+
+  for (const [field, value, code] of [
+    ['dirty', true, 'dirty'],
+    ['unpushed', 2, 'unpushed'],
+    ['locked', true, 'locked'],
+  ] as const) {
+    it(`blocks ${code} without force and overrides it with force`, () => {
+      const wt = makeWorktree({ [field]: value });
+      const normal = planRemoval(wt, { cwd: EXTERNAL_CWD });
+      const forced = planRemoval(wt, { cwd: EXTERNAL_CWD, force: true });
+
+      assert.deepEqual(codes(normal), [code]);
+      assert.deepEqual(normal.overridden, []);
+      assert.deepEqual(codes(forced), []);
+      assert.deepEqual(forced.overridden.map((block) => block.code), [code]);
+    });
+  }
+
+  it('only schedules branch deletion for a linked worktree with a branch', () => {
+    assert.equal(
+      planRemoval(makeWorktree({ branch: 'feature/x' }), {
+        cwd: EXTERNAL_CWD,
+        deleteBranch: true,
+      }).removeBranch,
+      'feature/x',
+    );
+    assert.equal(
+      planRemoval(makeWorktree({ branch: null }), {
+        cwd: EXTERNAL_CWD,
+        deleteBranch: true,
+      }).removeBranch,
+      null,
+    );
+    assert.equal(
+      planRemoval(makeWorktree({ isMain: true, branch: 'main' }), {
+        cwd: EXTERNAL_CWD,
+        deleteBranch: true,
+      }).removeBranch,
+      null,
+    );
+    assert.equal(
+      planRemoval(makeWorktree({ branch: 'feature/x' }), {
+        cwd: EXTERNAL_CWD,
+        deleteBranch: false,
+      }).removeBranch,
+      null,
+    );
+  });
+
+  it('returns no blocks for a fully clean linked worktree', () => {
+    const plan = planRemoval(makeWorktree(), { cwd: EXTERNAL_CWD });
+    assert.deepEqual(plan.blocks, []);
+  });
+});
