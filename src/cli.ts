@@ -171,9 +171,9 @@ listCommand.action(
     opts: FilterOptions & { json?: boolean; sort: SortKey; reverse?: boolean; main: boolean },
   ) => {
     const globals = program.opts<GlobalOptions>();
-    const { cwd, collection } = await gather(globals);
-
     const filters = buildFilters(opts, globals.ageBy, opts.main !== false);
+
+    const { cwd, collection } = await gather(globals);
     const selected = sortWorktrees(
       applyFilters(collection.worktrees, filters),
       opts.sort,
@@ -229,6 +229,10 @@ cleanCommand.action(
       );
     }
 
+    // Validate the filters before touching git or GitHub, so a typo reports a
+    // usage error rather than whatever the data layer happens to complain about.
+    const filters = buildFilters(opts, globals.ageBy, false);
+
     const { cwd, repo, collection } = await gather(globals);
 
     // A PR-state filter that we cannot evaluate must not silently match nothing
@@ -248,7 +252,6 @@ cleanCommand.action(
       return;
     }
 
-    const filters = buildFilters(opts, globals.ageBy, false);
     const candidates = sortWorktrees(
       applyFilters(collection.worktrees, filters),
       'age',
