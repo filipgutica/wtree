@@ -16,6 +16,14 @@ let repo: RepoContext;
 const git = (args: string[], cwd: string): string =>
   execFileSync('git', args, { cwd, encoding: 'utf8' });
 
+const isDirty = (path: string): boolean => {
+  try {
+    return git(['status', '--porcelain'], path).trim().length > 0;
+  } catch {
+    return false;
+  }
+};
+
 /** Build the enriched record the planner needs, straight from git. */
 const worktreeAt = async (path: string): Promise<Worktree> => {
   const raw = (await listWorktrees(main)).find((w) => w.path === path);
@@ -24,11 +32,13 @@ const worktreeAt = async (path: string): Promise<Worktree> => {
     ...raw,
     isMain: false,
     isCurrent: false,
-    missing: false,
+    missing: !existsSync(path),
+    adminDir: join(main, '.git', 'worktrees', path.split('/').pop() as string),
     lastCommitAt: null,
     checkoutAt: null,
     createdAt: null,
-    dirty: git(['status', '--porcelain'], path).trim().length > 0,
+    // A missing directory, or one whose .git file is gone, cannot answer.
+    dirty: isDirty(path),
     unpushed: null,
     mergedIntoDefault: false,
     sizeKb: null,
@@ -92,6 +102,53 @@ describe('execute', () => {
     const [result] = await execute([plan], { repo, force: true });
     assert.equal(result?.removed, true, result?.error ?? '');
     assert.equal(existsSync(path), false);
+  });
+
+  // `git worktree remove` validates the path is still a worktree, so it refuses a
+  // prunable record whose .git file is gone even though the directory survives.
+  it('prunes a stale record whose .git file is gone, and says the directory remains', async () => {
+    const path = join(root, 'broke1');
+    git(['worktree', 'add', '-q', '-b', 'broke1', path], main);
+    rmSync(join(path, '.git'));
+
+    const wt = await worktreeAt(path);
+    assert.equal(wt.prunable, true);
+
+    const [result] = await execute([planRemoval(wt, { cwd: main })], { repo });
+    assert.equal(result?.removed, true, result?.error ?? '');
+    assert.match(result?.note ?? '', /still on disk/);
+    assert.equal(existsSync(path), true, 'the directory is the user\'s, not git\'s');
+    assert.equal(
+      (await listWorktrees(main)).some((w) => w.path === path),
+      false,
+      'the record must be gone',
+    );
+  });
+
+  it('prunes a record whose directory vanished, with no note', async () => {
+    const path = join(root, 'gone1');
+    git(['worktree', 'add', '-q', '-b', 'gone1', path], main);
+    rmSync(path, { recursive: true, force: true });
+
+    const [result] = await execute([planRemoval(await worktreeAt(path), { cwd: main })], { repo });
+    assert.equal(result?.removed, true, result?.error ?? '');
+    assert.equal(result?.note, null);
+  });
+
+  // Pruning through `git worktree prune` would drop every stale record at once,
+  // which is more than the caller selected.
+  it('leaves other prunable records alone', async () => {
+    const target = join(root, 'stale1');
+    const bystander = join(root, 'stale2');
+    for (const [name, path] of [['stale1', target], ['stale2', bystander]] as const) {
+      git(['worktree', 'add', '-q', '-b', name, path], main);
+      rmSync(path, { recursive: true, force: true });
+    }
+
+    await execute([planRemoval(await worktreeAt(target), { cwd: main })], { repo });
+    const after = await listWorktrees(main);
+    assert.equal(after.some((w) => w.path === target), false);
+    assert.equal(after.some((w) => w.path === bystander), true);
   });
 
   it('reports a failure per worktree instead of aborting the batch', async () => {

@@ -36,6 +36,8 @@ export interface Worktree extends RawWorktree {
   isCurrent: boolean;
   /** Directory is absent on disk. */
   missing: boolean;
+  /** This worktree's record under `.git/worktrees/<id>`, null for the main worktree. */
+  adminDir: string | null;
   /** Author date of HEAD, ISO 8601. */
   lastCommitAt: string | null;
   /** mtime of the worktree's admin `index` file: when git last touched it. */

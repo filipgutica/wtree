@@ -514,7 +514,8 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
             ? `; branch ${result.branch} deleted`
             : `; branch ${result.branch} not deleted`
           : '';
-        lines.push(`${paint('REMOVED', 'green')} ${path}${branch}`);
+        lines.push(`${paint(result.note ? 'PRUNED ' : 'REMOVED', 'green')} ${path}${branch}`);
+        if (result.note) lines.push(`  ${paint(result.note, 'yellow')}`);
       } else {
         lines.push(`${paint('ERROR', 'red')} ${path} — ${result.error ?? 'removal failed'}`);
       }
@@ -593,7 +594,9 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
         ];
       } else {
         completed += 1;
-        const mark = event.result.removed ? paint('done ', 'green') : paint('failed', 'red');
+        const mark = event.result.removed
+          ? paint(event.result.note ? 'pruned' : 'done  ', 'green')
+          : paint('failed', 'red');
         const why = event.result.removed ? '' : ` — ${oneLine(event.result.error ?? 'unknown')}`;
         progressLines = [
           ...progressLines.filter((line) => !line.startsWith('\u2026')),

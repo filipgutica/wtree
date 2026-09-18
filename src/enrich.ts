@@ -88,6 +88,7 @@ export const collect = async ({
       isMain,
       isCurrent: exists && isPathInside(cwd, path),
       missing: !exists,
+      adminDir: isMain ? null : adminDir,
       lastCommitAt,
       checkoutAt,
       createdAt,

@@ -359,6 +359,7 @@ cleanCommand.action(
               : paint(` (branch ${r.branch} kept: ${r.branchError ?? 'unknown'})`, 'yellow')
             : '';
           process.stdout.write(`${paint('removed', 'green')} ${r.path}${branch}\n`);
+          if (r.note) process.stdout.write(`${paint(`        ${r.note}`, 'yellow')}\n`);
         } else {
           process.stdout.write(`${paint('failed ', 'red')} ${r.path}: ${r.error ?? 'unknown'}\n`);
         }
