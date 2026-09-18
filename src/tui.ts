@@ -45,7 +45,7 @@ const isEnter = (key: Key): boolean => key.name === 'return' || key.name === 'en
 
 const isEscape = (key: Key): boolean => key.name === 'escape' || key.sequence === '\u001b';
 
-const isUpper = (key: Key, value: string): boolean => value === key.name?.toUpperCase() && key.shift === true;
+const isUpper = (key: Key, value: string): boolean => key.name === value && key.shift === true;
 
 const renderCells = (headers: string[], rows: string[][]): string[] => {
   const widths = headers.map((header, index) =>
@@ -95,12 +95,10 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
   let resultScroll = 0;
   let busy = false;
   let rawModeEnabled = false;
-  let exitCode = 0;
   let resolveExit: ((code: number) => void) | null = null;
 
   const finish = (code: number): void => {
     if (resolveExit) {
-      exitCode = code;
       resolveExit(code);
       resolveExit = null;
     }
@@ -398,6 +396,7 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
     try {
       const next = await options.reload(reloadOptions);
       replaceCollection(next, false);
+      status = null;
       return true;
     } catch (error) {
       status = `reload failed: ${oneLine(errorMessage(error))}`;
@@ -559,8 +558,8 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
       status = 'refreshing...';
       render();
       try {
-        await reloadCollection({ refresh: true, size: showSize });
-        if (!status) status = 'refreshed';
+        const loaded = await reloadCollection({ refresh: true, size: showSize });
+        if (loaded) status = 'refreshed';
       } finally {
         busy = false;
         render();
@@ -580,8 +579,11 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
         render();
         try {
           const loaded = await reloadCollection({ refresh: false, size: true });
-          if (loaded) sizeLoaded = true;
-          if (loaded) showSize = true;
+          if (loaded) {
+            sizeLoaded = true;
+            showSize = true;
+            status = 'size column shown';
+          }
         } finally {
           busy = false;
           render();
@@ -690,10 +692,12 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
     stdin.off('keypress', onKeypress);
     stdout.off('resize', onResize);
     process.off('SIGINT', onSigint);
-    if (rawModeEnabled) stdin.setRawMode(false);
-    stdin.pause();
-    stdout.write(`${ESC}?25h${ESC}?1049l${ESC}0m`);
+    try {
+      stdout.write(`${ESC}?25h${ESC}?1049l${ESC}0m`);
+    } finally {
+      if (rawModeEnabled) stdin.setRawMode(false);
+      stdin.pause();
+    }
     resolveExit = null;
-    exitCode = exitCode;
   }
 };

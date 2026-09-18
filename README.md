@@ -136,3 +136,9 @@ Age expressions accept `12h`, `30d`, `6w`, `3mo`, `1y`, or an ISO date.
 
 The PR list is fetched in one `gh` call and cached for 10 minutes per repo
 (`--ttl`, `--refresh`), so repeated calls are cheap.
+
+`gh pr list` returns newest-first, so on a busy repo the bulk fetch truncates away
+exactly the old PRs that old worktrees belong to. When that happens, each
+unresolved branch gets a targeted lookup, and any branch still unanswered reports
+`unknown` rather than "no PR". Raise `--pr-limit` (default 500) to widen the bulk
+fetch on very large repos.

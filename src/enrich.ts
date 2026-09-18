@@ -23,6 +23,8 @@ export interface CollectOptions {
   refresh?: boolean;
   ttlSeconds?: number;
   concurrency?: number;
+  /** Upper bound on the bulk `gh pr list` fetch. */
+  prLimit?: number;
 }
 
 export interface Collection {
@@ -38,20 +40,25 @@ export const collect = async ({
   refresh = false,
   ttlSeconds = 600,
   concurrency = 8,
+  prLimit,
 }: CollectOptions): Promise<Collection> => {
-  const [raw, adminDirs, prIndex] = await Promise.all([
+  // The PR lookup needs the branch list, so the worktrees come first.
+  const [raw, adminDirs] = await Promise.all([
     listWorktrees(cwd),
     readAdminDirs(repo.commonDir),
-    noPr
-      ? Promise.resolve<PrIndex>({ available: false, reason: '--no-pr' })
-      : loadPrIndex({
-          cwd: repo.root,
-          commonDir: repo.commonDir,
-          remoteUrl: repo.remoteUrl,
-          refresh,
-          ttlSeconds,
-        }),
   ]);
+
+  const prIndex = noPr
+    ? ({ available: false, reason: '--no-pr' } satisfies PrIndex)
+    : await loadPrIndex({
+        cwd: repo.root,
+        commonDir: repo.commonDir,
+        remoteUrl: repo.remoteUrl,
+        branches: raw.map((w) => w.branch).filter((b): b is string => b !== null),
+        refresh,
+        ttlSeconds,
+        ...(prLimit !== undefined ? { limit: prLimit } : {}),
+      });
 
   const worktrees = await mapLimit(raw, concurrency, async (entry, index): Promise<Worktree> => {
     const path = resolve(entry.path);

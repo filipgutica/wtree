@@ -34,6 +34,7 @@ interface GlobalOptions {
   size?: boolean;
   ageBy: AgeBasis;
   ttl: number;
+  prLimit: number;
   color?: boolean;
 }
 
@@ -122,6 +123,7 @@ const gather = async (
     noPr: opts.pr === false,
     refresh: opts.refresh === true,
     ttlSeconds: opts.ttl,
+    prLimit: opts.prLimit,
   });
   return { cwd, repo, collection };
 };
@@ -154,6 +156,12 @@ program
     'commit' as AgeBasis,
   )
   .option('--ttl <seconds>', 'PR cache lifetime', positiveInt, 600)
+  .option(
+    '--pr-limit <n>',
+    'how many PRs to fetch in the bulk gh call before falling back to per-branch lookups',
+    positiveInt,
+    500,
+  )
   .showHelpAfterError();
 
 const listCommand = withFilterOptions(
@@ -370,6 +378,7 @@ program
           noPr: globals.pr === false,
           refresh,
           ttlSeconds: globals.ttl,
+          prLimit: globals.prLimit,
         }),
     });
   });
