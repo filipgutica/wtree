@@ -138,11 +138,23 @@ export const renderList = ({
   return table(headers, rows);
 };
 
+const LEGEND_ENTRIES: [string, ColorName, string][] = [
+  ['M', 'blue', 'main'],
+  ['@', 'cyan', 'current'],
+  ['*', 'yellow', 'dirty'],
+  ['\u2191', 'yellow', 'unpushed'],
+  ['L', 'yellow', 'locked'],
+  ['P', 'red', 'prunable'],
+  ['d', 'dim', 'detached'],
+  ['\u2713', 'magenta', 'in default branch'],
+];
+
+/**
+ * Each marker keeps the colour it has in the table, so the key reads as a key.
+ * Labels stay plain: dimming the whole line makes it vanish on some themes.
+ */
 export const legend = (): string =>
-  paint(
-    'flags: M main  @ current  * dirty  ↑ unpushed  L locked  P prunable  d detached  ✓ in default branch',
-    'dim',
-  );
+  `flags: ${LEGEND_ENTRIES.map(([glyph, color, label]) => `${paint(glyph, color)} ${label}`).join('  ')}`;
 
 export const renderPlan = (plans: Plan[], cwd: string, ageBasis: AgeBasis): string => {
   const lines: string[] = [];
