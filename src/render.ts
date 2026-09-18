@@ -5,12 +5,15 @@ import type { AgeBasis, Worktree } from './types.js';
 
 const ESC = '[';
 
-const useColor = (): boolean =>
+export const colorsEnabled = (): boolean =>
   !process.env['NO_COLOR'] && process.env['TERM'] !== 'dumb' && process.stdout.isTTY === true;
+
+const useColor = colorsEnabled;
 
 const CODES = {
   reset: `${ESC}0m`,
   dim: `${ESC}2m`,
+  reverse: `${ESC}7m`,
   bold: `${ESC}1m`,
   red: `${ESC}31m`,
   green: `${ESC}32m`,
@@ -58,6 +61,21 @@ export const clampAnsi = (text: string, width: number): string => {
     i += 1;
   }
   return `${out}\u2026${sawEscape ? CODES.reset : ''}`;
+};
+
+/**
+ * Invert a whole row to mark the cursor.
+ *
+ * The row already carries colour, and each of those spans ends with a full
+ * reset, which would drop the reverse attribute part way along the line. So
+ * every inner reset re-opens reverse, and the row is padded to the full width
+ * first so the highlight reaches the right edge rather than stopping at the text.
+ */
+export const highlightRow = (text: string, width: number, enabled = useColor()): string => {
+  if (!enabled) return text;
+  const padded = text + ' '.repeat(Math.max(0, width - visibleWidth(text)));
+  const kept = padded.split(CODES.reset).join(`${CODES.reset}${CODES.reverse}`);
+  return `${CODES.reverse}${kept}${CODES.reset}`;
 };
 
 const pad = (text: string, width: number): string =>

@@ -13,6 +13,7 @@ import {
   formatSize,
   BRANCH_MAX,
   clampAnsi,
+  highlightRow,
   legend,
   paint,
   shortPath,
@@ -307,10 +308,18 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
       'j/k move  Space select  a all  / filter  s sort  p PR  r refresh  Enter details  d delete  q quit',
     );
     const footerStatus = status ?? '';
-    const lines = [header, filterLine, legend(), tableLines[0] ?? '', ...shownRows];
+    const headerLines = [header, filterLine, legend(), tableLines[0] ?? ''];
+    const lines = [...headerLines, ...shownRows];
     while (lines.length < Math.max(0, height - 2)) lines.push('');
     lines.push(footer, footerStatus);
-    stdout.write(`${ESC}2J${ESC}H${clampLines(lines).join('\n')}`);
+
+    const clamped = clampLines(lines);
+    // Highlight the cursor row only when it is actually on screen.
+    const cursorLine = headerLines.length + (cursor - scrollTop);
+    if (visible.length > 0 && cursorLine >= headerLines.length && cursorLine < headerLines.length + shownRows.length) {
+      clamped[cursorLine] = highlightRow(clamped[cursorLine] ?? '', width());
+    }
+    stdout.write(`${ESC}2J${ESC}H${clamped.join('\n')}`);
   };
 
   const renderPaged = (title: string, content: string[], scroll: number): void => {
