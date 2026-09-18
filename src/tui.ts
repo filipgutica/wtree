@@ -11,6 +11,8 @@ import {
   formatAge,
   formatPr,
   formatSize,
+  BRANCH_MAX,
+  clampAnsi,
   legend,
   paint,
   shortPath,
@@ -252,7 +254,7 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
       return [
         marker,
         checkbox,
-        branchLabel(wt),
+        branchLabel(wt, branchWidth()),
         formatAge(ageDays(wt, options.ageBasis)),
         formatPr(wt),
         ...(showSize ? [formatSize(wt.sizeKb)] : []),
@@ -260,6 +262,21 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
         wt.missing ? paint(shortPath(wt.path, options.cwd), 'red') : shortPath(wt.path, options.cwd),
       ];
     });
+
+  const width = (): number => Math.max(20, stdout.columns || 80);
+
+  /** Nothing may wrap: a wrapped line costs a row the layout did not budget for. */
+  const clampLines = (lines: string[]): string[] => lines.map((l) => clampAnsi(l, width()));
+
+  /**
+   * Give BRANCH at most a third of the terminal, so PATH stays readable in a
+   * narrow window instead of being clamped away entirely.
+   */
+  const branchWidth = (): number => Math.max(12, Math.min(BRANCH_MAX, Math.floor(width() / 3)));
+
+  /** Prefer the full text, fall back to a shorter one rather than truncating key hints away. */
+  const fit = (full: string, short: string): string =>
+    visibleWidth(full) <= width() ? full : short;
 
   const renderList = (): void => {
     const visible = getVisibleWorktrees();
@@ -285,13 +302,15 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
     const filterLine = `sort: ${sortKey}  PR: ${prFilter}  filter: ${
       filterMode ? `/${filterDraft}_` : pathFilter || 'none'
     }  age: ${options.ageBasis}  delete branches: ${deleteBranch ? 'on' : 'off'}`;
-    const footer =
-      'j/k or arrows move  g/G top/bottom  Space select  a all removable  A/c clear  / filter  s sort  p PR  r refresh  S size  Enter details  d delete  b branches  q/Esc quit';
+    const footer = fit(
+      'j/k or arrows move  g/G top/bottom  Space select  a all removable  A/c clear  / filter  s sort  p PR  r refresh  S size  Enter details  d delete  b branches  q/Esc quit',
+      'j/k move  Space select  a all  / filter  s sort  p PR  r refresh  Enter details  d delete  q quit',
+    );
     const footerStatus = status ?? '';
     const lines = [header, filterLine, legend(), tableLines[0] ?? '', ...shownRows];
     while (lines.length < Math.max(0, height - 2)) lines.push('');
     lines.push(footer, footerStatus);
-    stdout.write(`${ESC}2J${ESC}H${lines.join('\n')}`);
+    stdout.write(`${ESC}2J${ESC}H${clampLines(lines).join('\n')}`);
   };
 
   const renderPaged = (title: string, content: string[], scroll: number): void => {
@@ -301,8 +320,13 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
     const start = Math.min(scroll, maxScroll);
     const lines = [title, ...content.slice(start, start + capacity - 1)];
     while (lines.length < Math.max(1, height - 1)) lines.push('');
-    lines.push('j/k or arrows scroll  y confirm where offered  b toggle branches  Esc cancel  q quit');
-    stdout.write(`${ESC}2J${ESC}H${lines.join('\n')}`);
+    lines.push(
+      fit(
+        'j/k or arrows scroll  y confirm where offered  b toggle branches  Esc cancel  q quit',
+        'j/k scroll  y confirm  b branches  Esc cancel  q quit',
+      ),
+    );
+    stdout.write(`${ESC}2J${ESC}H${clampLines(lines).join('\n')}`);
   };
 
   const render = (): void => {

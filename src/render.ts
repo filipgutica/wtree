@@ -30,6 +30,36 @@ const ANSI_RE = new RegExp(`${ESC.replace('[', '\\[')}[0-9;]*m`, 'g');
 /** Visible width, ignoring the ANSI sequences added by `paint`. */
 export const visibleWidth = (text: string): number => text.replace(ANSI_RE, '').length;
 
+/**
+ * Cut a string to `width` visible columns, keeping ANSI sequences intact.
+ * A full-screen view must never emit a line wider than the terminal: a wrapped
+ * line silently costs a second row and pushes content off the top of the screen.
+ */
+export const clampAnsi = (text: string, width: number): string => {
+  if (width <= 0) return '';
+  if (visibleWidth(text) <= width) return text;
+
+  let out = '';
+  let shown = 0;
+  let i = 0;
+  let sawEscape = false;
+
+  while (i < text.length && shown < width - 1) {
+    if (text.startsWith(ESC, i)) {
+      const end = text.indexOf('m', i);
+      if (end === -1) break;
+      out += text.slice(i, end + 1);
+      sawEscape = true;
+      i = end + 1;
+      continue;
+    }
+    out += text[i];
+    shown += 1;
+    i += 1;
+  }
+  return `${out}\u2026${sawEscape ? CODES.reset : ''}`;
+};
+
 const pad = (text: string, width: number): string =>
   text + ' '.repeat(Math.max(0, width - visibleWidth(text)));
 
