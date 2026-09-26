@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import { Command, InvalidArgumentError } from 'commander';
 import { collect, type Collection } from './enrich.js';
@@ -23,7 +24,18 @@ import {
 } from './render.js';
 import type { AgeBasis } from './types.js';
 
-const VERSION = '0.1.0';
+const packageJson: unknown = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+);
+if (
+  typeof packageJson !== 'object' ||
+  packageJson === null ||
+  !('version' in packageJson) ||
+  typeof packageJson.version !== 'string'
+) {
+  throw new Error('package.json must contain a version string');
+}
+const VERSION = packageJson.version;
 
 const AGE_BASES: readonly AgeBasis[] = ['commit', 'checkout', 'created'];
 const SORT_KEYS: readonly SortKey[] = ['age', 'path', 'branch', 'size', 'pr'];
