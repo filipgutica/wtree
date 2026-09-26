@@ -442,38 +442,50 @@ const printPath = (path: string): void => {
 const hasInteractiveTerminal = (): boolean =>
   process.stdin.isTTY === true && process.stderr.isTTY === true;
 
+/**
+ * The interactive browser, for `ui` and a bare `clean` at a terminal. It draws
+ * on /dev/tty, so stdout carries only the path chosen with `o`, if any.
+ */
+const runUi = async (globals: GlobalOptions): Promise<void> => {
+  if (!hasInteractiveTerminal()) {
+    process.stderr.write(
+      'wtree ui needs an interactive terminal. Use `wtree list --json` instead.\n',
+    );
+    process.exitCode = 2;
+    return;
+  }
+  const { cwd, repo, collection } = await gather(globals);
+  const { runTui } = await import('./tui.js');
+  const result = await runTui({
+    cwd,
+    repo,
+    collection,
+    ageBasis: globals.ageBy,
+    showSize: globals.size === true,
+    reload: ({ refresh, size }: { refresh: boolean; size: boolean }) =>
+      collect({
+        cwd,
+        repo,
+        size,
+        noPr: globals.pr === false,
+        refresh,
+        ttlSeconds: globals.ttl,
+        prLimit: globals.prLimit,
+      }),
+    create: async (branch: string) => {
+      const res = await createWorktree({ cwd, branch, fetch: globals.pr !== false });
+      return { path: res.path, created: res.created, warnings: res.warnings };
+    },
+  });
+  process.exitCode = result.code;
+  if (result.openPath) printPath(result.openPath);
+};
+
 program
   .command('ui')
-  .description('interactive worktree browser')
+  .description('interactive worktree browser; `o` exits and prints the chosen path')
   .action(async () => {
-    const globals = program.opts<GlobalOptions>();
-    // An agent invoking this without a terminal would hang forever. Fail loudly instead.
-    if (!process.stdin.isTTY || !process.stdout.isTTY) {
-      process.stderr.write(
-        'wtree ui needs an interactive terminal. Use `wtree list --json` instead.\n',
-      );
-      process.exitCode = 2;
-      return;
-    }
-    const { cwd, repo, collection } = await gather(globals);
-    const { runTui } = await import('./tui.js');
-    process.exitCode = await runTui({
-      cwd,
-      repo,
-      collection,
-      ageBasis: globals.ageBy,
-      showSize: globals.size === true,
-      reload: ({ refresh, size }: { refresh: boolean; size: boolean }) =>
-        collect({
-          cwd,
-          repo,
-          size,
-          noPr: globals.pr === false,
-          refresh,
-          ttlSeconds: globals.ttl,
-          prLimit: globals.prLimit,
-        }),
-    });
+    await runUi(program.opts<GlobalOptions>());
   });
 
 const reportCreate = (branch: string, res: CreateResult): void => {
