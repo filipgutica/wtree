@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 
 export interface RunResult {
   ok: boolean;
@@ -41,6 +41,42 @@ export const run = ({
         resolve({ ok: !error, code, stdout: stdout ?? '', stderr: stderr ?? '' });
       },
     );
+  });
+
+/**
+ * Run a command with `input` piped to its stdin, capture stdout, and let it
+ * share our stderr. Built for fzf, which draws its UI on /dev/tty itself.
+ * Never throws: a missing binary comes back as code 127.
+ */
+export const runWithInput = ({
+  cmd,
+  args,
+  input,
+  cwd,
+}: {
+  cmd: string;
+  args: string[];
+  input: string;
+  cwd?: string;
+}): Promise<{ code: number; stdout: string }> =>
+  new Promise((resolve) => {
+    let settled = false;
+    let stdout = '';
+    const finish = (code: number): void => {
+      if (settled) return;
+      settled = true;
+      resolve({ code, stdout });
+    };
+    const child = spawn(cmd, args, { cwd, stdio: ['pipe', 'pipe', 'inherit'] });
+    child.on('error', (error: NodeJS.ErrnoException) => finish(error.code === 'ENOENT' ? 127 : 1));
+    child.on('close', (code, signal) => finish(code ?? (signal ? 128 : 1)));
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      stdout += chunk;
+    });
+    // EPIPE when the child exits (or never started) before reading everything.
+    child.stdin.on('error', () => {});
+    child.stdin.end(input);
   });
 
 export const git = (args: string[], cwd?: string): Promise<RunResult> =>

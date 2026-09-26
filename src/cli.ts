@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { Command, InvalidArgumentError } from 'commander';
 import { collect, type Collection } from './enrich.js';
@@ -13,7 +14,9 @@ import {
   type Filters,
   type SortKey,
 } from './filter.js';
-import { NotAGitRepoError, getRepoContext, realpathSafe, type RepoContext } from './git.js';
+import { NotAGitRepoError, getRepoContext, listWorktrees, realpathSafe, type RepoContext } from './git.js';
+import { CreateError, assertLive, createWorktree, type CreateResult } from './create.js';
+import { loadCandidates, pickCandidate } from './pick.js';
 import {
   legend,
   paint,
@@ -423,6 +426,22 @@ program
     if (output) process.stdout.write(`${output}\n`);
   });
 
+/**
+ * `new`, `go`, `path` and `ui` feed `cd "$(...)"`, so stdout carries exactly one
+ * line, the path. Everything else goes to stderr.
+ */
+const printPath = (path: string): void => {
+  process.stdout.write(`${path}\n`);
+};
+
+/**
+ * A script or agent with piped stdio usually still has a controlling terminal,
+ * so /dev/tty opening is not proof that anyone is there to answer. Require a
+ * terminal on stdin and stderr; stdout may be a pipe, as under `p=$(wtree ui)`.
+ */
+const hasInteractiveTerminal = (): boolean =>
+  process.stdin.isTTY === true && process.stderr.isTTY === true;
+
 program
   .command('ui')
   .description('interactive worktree browser')
@@ -457,6 +476,134 @@ program
     });
   });
 
+const reportCreate = (branch: string, res: CreateResult): void => {
+  if (res.gitOutput) process.stderr.write(`${res.gitOutput}\n`);
+  for (const w of res.warnings) process.stderr.write(`${paint(`warning: ${w}`, 'yellow')}\n`);
+  if (!res.created) {
+    process.stderr.write(`${paint(`${branch} is already checked out at ${res.path}`, 'dim')}\n`);
+  }
+};
+
+program
+  .command('new')
+  .description('create a worktree for <branch> under ~/.wtree/<repo>/ and print its path')
+  .argument('<branch>', 'branch to check out; created off the base if it does not exist')
+  .option('--from <base>', 'start point for a new branch (default: the remote default branch)')
+  .option('--no-fetch', 'do not look for the branch on origin first')
+  .action(async (branch: string, opts: { from?: string; fetch: boolean }) => {
+    const cwd = await realpathSafe(resolveCwd(program.opts<GlobalOptions>()));
+    const res = await createWorktree({
+      cwd,
+      branch,
+      base: opts.from,
+      fetch: opts.fetch,
+    });
+    reportCreate(branch, res);
+    printPath(res.path);
+  });
+
+program
+  .command('path')
+  .description('print the path of the worktree matching <name> (branch or path)')
+  .argument('<name>', 'exact branch, exact path, or a unique substring of either')
+  .action(async (name: string) => {
+    const cwd = await realpathSafe(resolveCwd(program.opts<GlobalOptions>()));
+    const worktrees = (await listWorktrees(cwd)).filter((w) => !w.bare);
+    const asPath = await realpathSafe(resolve(cwd, name));
+    const exact =
+      worktrees.find((w) => w.branch === name) ??
+      worktrees.find((w) => w.path === name || w.path === asPath);
+    if (exact) {
+      await assertLive(exact);
+      printPath(exact.path);
+      return;
+    }
+    const matches = worktrees.filter(
+      (w) => (w.branch !== null && w.branch.includes(name)) || w.path.includes(name),
+    );
+    const [only] = matches;
+    if (matches.length === 1 && only) {
+      await assertLive(only);
+      printPath(only.path);
+      return;
+    }
+    if (matches.length === 0) {
+      process.stderr.write(`wtree: no worktree matches "${name}"\n`);
+      process.exitCode = 1;
+      return;
+    }
+    process.stderr.write(`wtree: "${name}" matches ${matches.length} worktrees:\n`);
+    for (const w of matches) process.stderr.write(`  ${w.branch ?? '(detached)'}  ${w.path}\n`);
+    process.exitCode = 2;
+  });
+
+program
+  .command('go')
+  .description('pick a worktree or branch (fzf if installed) and print its path, creating it if needed')
+  .argument('[query]', 'initial filter; an exact branch name skips the picker')
+  .option('--no-fetch', 'when creating, do not look for the branch on origin first')
+  .action(async (query: string | undefined, opts: { fetch: boolean }) => {
+    const cwd = await realpathSafe(resolveCwd(program.opts<GlobalOptions>()));
+    const candidates = await loadCandidates(cwd);
+
+    let chosen = query !== undefined ? candidates.find((c) => c.branch === query) : undefined;
+    if (!chosen) {
+      if (!hasInteractiveTerminal()) {
+        process.stderr.write('wtree go needs an interactive terminal\n');
+        process.exitCode = 2;
+        return;
+      }
+      const picked = await pickCandidate({ candidates, query });
+      if (picked.status === 'no-tty') {
+        process.stderr.write('wtree go needs an interactive terminal\n');
+        process.exitCode = 2;
+        return;
+      }
+      if (picked.status === 'failed') {
+        process.exitCode = 2;
+        return;
+      }
+      if (picked.status === 'cancelled') {
+        process.exitCode = 1;
+        return;
+      }
+      chosen = picked.candidate;
+    }
+
+    if (chosen.path) {
+      await assertLive({ path: chosen.path, prunable: false });
+      printPath(chosen.path);
+      return;
+    }
+    const branch = chosen.branch ?? chosen.label;
+    const res = await createWorktree({ cwd, branch, fetch: opts.fetch });
+    reportCreate(branch, res);
+    printPath(res.path);
+  });
+
+const SHELLS = ['zsh', 'bash'] as const;
+
+// Plain POSIX function syntax plus `local`, so the same text works in zsh and bash.
+const SHELL_WRAPPER = `wt() {
+  case "$1" in
+    new|go|path|ui)
+      local p
+      p=$(command wtree "$@") || return
+      if [ -n "$p" ]; then cd "$p"; fi
+      ;;
+    *) command wtree "$@" ;;
+  esac
+}
+`;
+
+program
+  .command('shell-init')
+  .description('print a `wt` shell function that cds into the path new/go/path/ui print')
+  .argument('[shell]', `one of: ${SHELLS.join(', ')}`, oneOf(SHELLS), 'zsh')
+  .action(() => {
+    process.stdout.write(SHELL_WRAPPER);
+  });
+
 const main = async (): Promise<void> => {
   try {
     await program.parseAsync(process.argv);
@@ -464,6 +611,11 @@ const main = async (): Promise<void> => {
     if (error instanceof NotAGitRepoError) {
       process.stderr.write(`wtree: ${error.message}\n`);
       process.exitCode = 2;
+      return;
+    }
+    if (error instanceof CreateError) {
+      process.stderr.write(`wtree: ${error.message}\n`);
+      process.exitCode = 1;
       return;
     }
     if (error instanceof InvalidFilterError) {
