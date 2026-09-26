@@ -5,6 +5,7 @@ import { createInterface } from 'node:readline/promises';
 import { Command, InvalidArgumentError } from 'commander';
 import { collect, type Collection } from './enrich.js';
 import { execute, planAll, prune, type Plan } from './clean.js';
+import { CreateError, assertLive, createWorktree, type CreateResult } from './create.js';
 import {
   InvalidFilterError,
   applyFilters,
@@ -14,18 +15,26 @@ import {
   type Filters,
   type SortKey,
 } from './filter.js';
-import { NotAGitRepoError, getRepoContext, listWorktrees, realpathSafe, type RepoContext } from './git.js';
-import { CreateError, assertLive, createWorktree, type CreateResult } from './create.js';
+import {
+  NotAGitRepoError,
+  getRepoContext,
+  listWorktrees,
+  realpathSafe,
+  type RepoContext,
+} from './git.js';
 import { loadCandidates, pickCandidate } from './pick.js';
 import {
   legend,
+  listHints,
   paint,
   planToJson,
   renderList,
   renderPlan,
+  restoreHint,
   toJson,
+  unblockHint,
 } from './render.js';
-import type { AgeBasis } from './types.js';
+import type { AgeBasis, Worktree } from './types.js';
 
 const packageJson: unknown = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
@@ -55,6 +64,7 @@ interface GlobalOptions {
 }
 
 interface FilterOptions {
+  done?: boolean;
   prState?: string;
   olderThan?: string;
   newerThan?: string;
@@ -77,6 +87,18 @@ const positiveInt = (value: string): number => {
   const n = Number.parseInt(value, 10);
   if (!Number.isFinite(n) || n < 0) throw new InvalidArgumentError('expected a non-negative integer');
   return n;
+};
+
+/**
+ * `--done` is shorthand for `--pr-state merged,closed`. Normalise it first so
+ * everything downstream, including the fail-closed PR check, sees `prState`.
+ */
+const normalizeDone = <T extends FilterOptions>(f: T): T => {
+  if (!f.done) return f;
+  if (f.prState !== undefined) {
+    throw new InvalidFilterError('--done means --pr-state merged,closed; pass one or the other.');
+  }
+  return { ...f, prState: 'merged,closed' };
 };
 
 /** True when a filter option that actually narrows the set was supplied. */
@@ -111,6 +133,7 @@ const buildFilters = (
 
 const withFilterOptions = (cmd: Command): Command =>
   cmd
+    .option('--done', 'same as --pr-state merged,closed')
     .option(
       '--pr-state <states>',
       'comma separated: open, merged, closed, none, unknown',
@@ -178,7 +201,7 @@ program
   .option('-C, --cwd <dir>', 'run as if started in <dir>')
   .option('--no-pr', 'skip GitHub entirely; PR state becomes unknown')
   .option('--refresh', 'ignore the cached PR list and re-query GitHub')
-  .option('--size', 'measure disk usage with du (slow on large trees)')
+  .option('-s, --size', 'measure disk usage with du (slow on large trees)')
   .option(
     '--age-by <basis>',
     `which timestamp age uses: ${AGE_BASES.join(', ')}`,
@@ -198,7 +221,7 @@ const listCommand = withFilterOptions(
   program
     .command('list', { isDefault: true })
     .description('show every worktree for this repo')
-    .option('--json', 'machine readable output')
+    .option('-j, --json', 'machine readable output')
     .option('--sort <key>', `sort by ${SORT_KEYS.join(', ')}`, oneOf(SORT_KEYS), 'age' as SortKey)
     .option('--reverse', 'reverse the sort')
     .option('--no-main', 'hide the main worktree'),
@@ -206,9 +229,10 @@ const listCommand = withFilterOptions(
 
 listCommand.action(
   async (
-    opts: FilterOptions & { json?: boolean; sort: SortKey; reverse?: boolean; main: boolean },
+    rawOpts: FilterOptions & { json?: boolean; sort: SortKey; reverse?: boolean; main: boolean },
   ) => {
     const globals = program.opts<GlobalOptions>();
+    const opts = normalizeDone(rawOpts);
     const filters = buildFilters(opts, globals.ageBy, opts.main !== false);
 
     const { cwd, collection } = await gather(globals);
@@ -230,9 +254,20 @@ listCommand.action(
       return;
     }
     process.stdout.write(
-      `${renderList({ worktrees: selected, ageBasis: globals.ageBy, cwd, showSize: globals.size === true })}\n`,
+      `${renderList({
+        worktrees: selected,
+        ageBasis: globals.ageBy,
+        cwd,
+        showSize: globals.size === true,
+        // From the unfiltered list: --no-main and other filters can drop main.
+        mainPath: collection.worktrees.find((w) => w.isMain)?.path ?? null,
+        compactPaths: process.stdout.isTTY === true,
+      })}\n`,
     );
-    if (process.stdout.isTTY) process.stdout.write(`${legend()}\n`);
+    if (process.stdout.isTTY) {
+      process.stdout.write(`${legend()}\n`);
+      for (const hint of listHints(selected)) process.stdout.write(`${paint(hint, 'dim')}\n`);
+    }
   },
 );
 
@@ -242,35 +277,147 @@ const cleanCommand = withFilterOptions(
     .description('remove worktrees matching the filters (dry run unless --yes)')
     .option('-n, --dry-run', 'show the plan and stop')
     .option('-y, --yes', 'skip the confirmation prompt')
-    .option('--force', 'override dirty, unpushed and locked (never main or cwd)')
-    .option('--delete-branch', 'also delete the branch of each removed worktree')
+    .option('-f, --force', 'override dirty, unpushed and locked (never main or cwd)')
+    .option('-d, --delete-branch', 'also delete the branch of each removed worktree')
     .option('--force-branch-delete', 'use git branch -D instead of -d')
     .option(
       '--keep-directory',
       'when pruning a stale worktree, leave its leftover directory on disk',
     )
     .option('--all', 'act on every non-main worktree (required when no filter is given)')
-    .option('--json', 'machine readable plan and results'),
+    .option('-j, --json', 'machine readable plan and results'),
 );
 
+interface RemovalOptions {
+  yes?: boolean;
+  dryRun?: boolean;
+  force?: boolean;
+  deleteBranch?: boolean;
+  forceBranchDelete?: boolean;
+  keepDirectory?: boolean;
+  json?: boolean;
+}
+
+/**
+ * Show the plan, confirm, remove, report. Shared by `clean` and `rm` so both
+ * follow the same confirmation and safety rules.
+ */
+const runRemoval = async ({
+  plans,
+  opts,
+  cwd,
+  repo,
+  collection,
+  ageBasis,
+}: {
+  plans: Plan[];
+  opts: RemovalOptions;
+  cwd: string;
+  repo: RepoContext;
+  collection: Collection;
+  ageBasis: AgeBasis;
+}): Promise<void> => {
+  const removable = plans.filter((p: Plan) => p.blocks.length === 0);
+
+  const showPlan = (dryRun: boolean): void => {
+    if (opts.json) {
+      process.stdout.write(`${JSON.stringify({ dryRun, plan: planToJson(plans) }, null, 2)}\n`);
+      return;
+    }
+    warnPrUnavailable(collection, false);
+    process.stdout.write(`${renderPlan(plans, cwd, ageBasis)}\n`);
+  };
+
+  if (opts.dryRun || removable.length === 0) {
+    showPlan(true);
+    if (!opts.json && !opts.dryRun && removable.length === 0) return;
+    if (!opts.json && removable.length > 0) {
+      process.stdout.write(`\n${paint('dry run. drop --dry-run to remove them.', 'dim')}\n`);
+    }
+    return;
+  }
+
+  if (!opts.yes) {
+    // Prompting needs someone to answer. In a script, a pipeline or an agent
+    // there is nobody, so refuse rather than block forever or delete unasked.
+    if (!process.stdin.isTTY || !process.stdout.isTTY || opts.json) {
+      showPlan(true);
+      process.stderr.write(
+        'wtree: refusing to remove without confirmation. Pass --yes to remove, or --dry-run to just see the plan.\n',
+      );
+      process.exitCode = 2;
+      return;
+    }
+    showPlan(false);
+    const branchNote = opts.deleteBranch ? ' and their branches' : '';
+    const ok = await confirm(
+      `\nRemove ${removable.length} worktree${removable.length === 1 ? '' : 's'}${branchNote}?`,
+    );
+    if (!ok) {
+      process.stdout.write(`${paint('cancelled.', 'dim')}\n`);
+      return;
+    }
+  }
+
+  const results = await execute(plans, {
+    repo,
+    force: opts.force === true,
+    forceBranchDelete: opts.forceBranchDelete === true,
+    keepDirectory: opts.keepDirectory === true,
+  });
+
+  if (opts.json) {
+    process.stdout.write(
+      `${JSON.stringify({ dryRun: false, plan: planToJson(plans), results }, null, 2)}\n`,
+    );
+  } else {
+    // --yes skips the plan, so without this the blocked worktrees vanish and
+    // the user is left wondering why a match they expected was not removed.
+    for (const plan of plans.filter((p: Plan) => p.blocks.length > 0)) {
+      process.stdout.write(
+        `${paint('skipped', 'yellow')} ${plan.worktree.path}: ${plan.blocks
+          .map((b) => b.message)
+          .join('; ')}${unblockHint(plan.blocks)}\n`,
+      );
+    }
+    // A result only carries its branch when branch deletion was requested.
+    const branchByPath = new Map(plans.map((p) => [p.worktree.path, p.worktree.branch]));
+    for (const r of results) {
+      if (r.removed) {
+        const branch = r.branch
+          ? r.branchDeleted
+            ? paint(` (branch ${r.branch} deleted)`, 'dim')
+            : paint(` (branch ${r.branch} kept: ${r.branchError ?? 'unknown'})`, 'yellow')
+          : '';
+        process.stdout.write(`${paint('removed', 'green')} ${r.path}${branch}\n`);
+        if (r.note) process.stdout.write(`${paint(`        ${r.note}`, 'yellow')}\n`);
+        const hint = restoreHint({ ...r, branch: r.branch ?? branchByPath.get(r.path) ?? null });
+        if (hint) process.stdout.write(`${paint(`        ${hint}`, 'dim')}\n`);
+      } else {
+        process.stdout.write(`${paint('failed ', 'red')} ${r.path}: ${r.error ?? 'unknown'}\n`);
+      }
+    }
+  }
+
+  if (results.some((r) => !r.removed)) process.exitCode = 1;
+};
+
 cleanCommand.action(
-  async (
-    opts: FilterOptions & {
-      yes?: boolean;
-      dryRun?: boolean;
-      force?: boolean;
-      deleteBranch?: boolean;
-      forceBranchDelete?: boolean;
-      keepDirectory?: boolean;
-      all?: boolean;
-      json?: boolean;
-    },
-  ) => {
+  async (rawOpts: FilterOptions & RemovalOptions & { all?: boolean }) => {
     const globals = program.opts<GlobalOptions>();
+    const opts = normalizeDone(rawOpts);
 
     if (!hasNarrowingFilter(opts) && !opts.all) {
+      // A person at a terminal who typed a bare `clean` wants to pick by hand.
+      // Scripts, agents and explicit --json/--yes/--dry-run still get the error.
+      const interactive =
+        process.stdin.isTTY && process.stdout.isTTY && !opts.json && !opts.yes && !opts.dryRun;
+      if (interactive) {
+        await runUi(globals);
+        return;
+      }
       throw new InvalidFilterError(
-        'refusing to act on every worktree. Pass a filter (--pr-state, --older-than, ...) or --all.',
+        'refusing to act on every worktree. Pass a filter (--pr-state, --done, --older-than, ...) or --all.',
       );
     }
 
@@ -309,87 +456,72 @@ cleanCommand.action(
       deleteBranch: opts.deleteBranch === true,
       requiresPrState,
     });
-    const removable = plans.filter((p: Plan) => p.blocks.length === 0);
+    await runRemoval({ plans, opts, cwd, repo, collection, ageBasis: globals.ageBy });
+  },
+);
 
-    const showPlan = (dryRun: boolean): void => {
+program
+  .command('rm')
+  .description('remove the worktrees whose branch or path is exactly <name> (asks first unless --yes)')
+  .argument('<name...>', 'exact branch name or worktree path; never a substring')
+  .option('-n, --dry-run', 'show the plan and stop')
+  .option('-y, --yes', 'skip the confirmation prompt')
+  .option('-f, --force', 'override dirty, unpushed and locked (never main or cwd)')
+  .option('-d, --delete-branch', 'also delete the branch of each removed worktree')
+  .option('--force-branch-delete', 'use git branch -D instead of -d')
+  .option(
+    '--keep-directory',
+    'when pruning a stale worktree, leave its leftover directory on disk',
+  )
+  .option('-j, --json', 'machine readable plan and results')
+  .action(async (names: string[], opts: RemovalOptions) => {
+    const globals = program.opts<GlobalOptions>();
+    const { cwd, repo, collection } = await gather(globals);
+    const worktrees = collection.worktrees.filter((w) => !w.bare);
+
+    // Exact matches only: this deletes, so "feat" must never mean "feat/foo".
+    const targets = new Map<string, Worktree>();
+    const unmatched: string[] = [];
+    for (const name of names) {
+      const asPath = resolve(cwd, name);
+      const real = await realpathSafe(asPath);
+      const hits = worktrees.filter(
+        (w) => w.branch === name || w.path === asPath || w.path === real,
+      );
+      if (hits.length === 0) unmatched.push(name);
+      for (const w of hits) targets.set(w.path, w);
+    }
+
+    // One bad name removes nothing, so a typo cannot turn into a partial run.
+    if (unmatched.length > 0) {
       if (opts.json) {
-        process.stdout.write(`${JSON.stringify({ dryRun, plan: planToJson(plans) }, null, 2)}\n`);
-        return;
+        process.stdout.write(
+          `${JSON.stringify({ error: 'no-exact-match', names: unmatched }, null, 2)}\n`,
+        );
       }
-      warnPrUnavailable(collection, false);
-      process.stdout.write(`${renderPlan(plans, cwd, globals.ageBy)}\n`);
-    };
-
-    if (opts.dryRun || removable.length === 0) {
-      showPlan(true);
-      if (!opts.json && !opts.dryRun && removable.length === 0) return;
-      if (!opts.json && removable.length > 0) {
-        process.stdout.write(`\n${paint('dry run. drop --dry-run to remove them.', 'dim')}\n`);
+      for (const name of unmatched) {
+        process.stderr.write(`wtree: no worktree has the exact branch or path "${name}"\n`);
+        const close = worktrees.filter(
+          (w) => (w.branch !== null && w.branch.includes(name)) || w.path.includes(name),
+        );
+        if (close.length > 0) {
+          process.stderr.write('  close matches:\n');
+          for (const w of close) process.stderr.write(`    ${w.branch ?? '(detached)'}  ${w.path}\n`);
+        }
       }
+      process.stderr.write('wtree: nothing was removed.\n');
+      process.exitCode = 2;
       return;
     }
 
-    if (!opts.yes) {
-      // Prompting needs someone to answer. In a script, a pipeline or an agent
-      // there is nobody, so refuse rather than block forever or delete unasked.
-      if (!process.stdin.isTTY || !process.stdout.isTTY || opts.json) {
-        showPlan(true);
-        process.stderr.write(
-          'wtree: refusing to remove without confirmation. Pass --yes to remove, or --dry-run to just see the plan.\n',
-        );
-        process.exitCode = 2;
-        return;
-      }
-      showPlan(false);
-      const branchNote = opts.deleteBranch ? ' and their branches' : '';
-      const ok = await confirm(
-        `\nRemove ${removable.length} worktree${removable.length === 1 ? '' : 's'}${branchNote}?`,
-      );
-      if (!ok) {
-        process.stdout.write(`${paint('cancelled.', 'dim')}\n`);
-        return;
-      }
-    }
-
-    const results = await execute(plans, {
-      repo,
+    const plans = planAll([...targets.values()], {
+      cwd,
       force: opts.force === true,
-      forceBranchDelete: opts.forceBranchDelete === true,
-      keepDirectory: opts.keepDirectory === true,
+      deleteBranch: opts.deleteBranch === true,
+      requiresPrState: false,
     });
-
-    if (opts.json) {
-      process.stdout.write(
-        `${JSON.stringify({ dryRun: false, plan: planToJson(plans), results }, null, 2)}\n`,
-      );
-    } else {
-      // --yes skips the plan, so without this the blocked worktrees vanish and
-      // the user is left wondering why a match they expected was not removed.
-      for (const plan of plans.filter((p: Plan) => p.blocks.length > 0)) {
-        process.stdout.write(
-          `${paint('skipped', 'yellow')} ${plan.worktree.path}: ${plan.blocks
-            .map((b) => b.message)
-            .join('; ')}\n`,
-        );
-      }
-      for (const r of results) {
-        if (r.removed) {
-          const branch = r.branch
-            ? r.branchDeleted
-              ? paint(` (branch ${r.branch} deleted)`, 'dim')
-              : paint(` (branch ${r.branch} kept: ${r.branchError ?? 'unknown'})`, 'yellow')
-            : '';
-          process.stdout.write(`${paint('removed', 'green')} ${r.path}${branch}\n`);
-          if (r.note) process.stdout.write(`${paint(`        ${r.note}`, 'yellow')}\n`);
-        } else {
-          process.stdout.write(`${paint('failed ', 'red')} ${r.path}: ${r.error ?? 'unknown'}\n`);
-        }
-      }
-    }
-
-    if (results.some((r) => !r.removed)) process.exitCode = 1;
-  },
-);
+    await runRemoval({ plans, opts, cwd, repo, collection, ageBasis: globals.ageBy });
+  });
 
 program
   .command('prune')

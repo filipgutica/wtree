@@ -202,6 +202,30 @@ describe('execute', () => {
     assert.equal(after.some((w) => w.path === bystander), true);
   });
 
+  it('removes empty parents under ~/.wtree/<repo> but keeps the repo directory', async () => {
+    const home = join(root, 'home');
+    const repoDir = join(home, '.wtree', 'main');
+    const savedHome = process.env.HOME;
+    process.env.HOME = home;
+    try {
+      const foo = join(repoDir, 'feat', 'foo');
+      const bar = join(repoDir, 'feat', 'bar');
+      git(['worktree', 'add', '-q', '-b', 'feat/foo', foo], main);
+      git(['worktree', 'add', '-q', '-b', 'feat/bar', bar], main);
+
+      await execute([planRemoval(await worktreeAt(foo), { cwd: main })], { repo });
+      assert.equal(existsSync(foo), false);
+      assert.equal(existsSync(join(repoDir, 'feat')), true, 'feat/bar still lives in feat/');
+
+      await execute([planRemoval(await worktreeAt(bar), { cwd: main })], { repo });
+      assert.equal(existsSync(join(repoDir, 'feat')), false);
+      assert.equal(existsSync(repoDir), true, '~/.wtree/<repo> itself is kept');
+    } finally {
+      if (savedHome === undefined) delete process.env.HOME;
+      else process.env.HOME = savedHome;
+    }
+  });
+
   it('reports a failure per worktree instead of aborting the batch', async () => {
     const good = join(root, 'good1');
     git(['worktree', 'add', '-q', '-b', 'good1', good], main);

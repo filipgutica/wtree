@@ -1,6 +1,7 @@
-import { readdir, rm, stat } from 'node:fs/promises';
+import { readdir, rm, rmdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { realWorktreeHome } from './create.js';
 import { git } from './exec.js';
 import { isPathInside, type RepoContext } from './git.js';
 import type { Worktree } from './types.js';
@@ -173,6 +174,7 @@ export const execute = async (
       result.error = removal.ok ? null : removal.stderr.trim() || `git exited ${removal.code}`;
     }
 
+    if (result.removed) await removeEmptyParents(worktree.path);
 
     // Deleting the branch of a worktree that is still there would orphan the checkout.
     if (result.removed && plan.removeBranch) {
@@ -187,6 +189,30 @@ export const execute = async (
   }
 
   return results;
+};
+
+/**
+ * `feat/foo` lives at `~/.wtree/<repo>/feat/foo`, so removing it can leave an
+ * empty `feat/`. Walk up removing empty directories, stopping at (and keeping)
+ * `~/.wtree/<repo>`. rmdir refuses a non-empty directory, which is what makes
+ * this safe; paths outside `~/.wtree` are never touched.
+ */
+const removeEmptyParents = async (path: string): Promise<void> => {
+  const base = realWorktreeHome();
+  const rel = relative(base, resolve(path));
+  if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) return;
+  const [repoDir] = rel.split(sep);
+  if (!repoDir) return;
+  const stop = join(base, repoDir);
+  for (let dir = dirname(resolve(path)); dir.startsWith(stop + sep); dir = dirname(dir)) {
+    try {
+      await rmdir(dir);
+    } catch {
+      // Not empty, already gone, or not ours to remove: the walk ends here and
+      // the removal itself still succeeded.
+      return;
+    }
+  }
 };
 
 type PruneOutcome =

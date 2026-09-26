@@ -13,7 +13,7 @@ feat/usage-charts       3mo   merged #4502            ✓ ../api-usage-charts
 chore/bump-deps         5mo   closed #4390             ../api-bump-deps
 spike/flink-cdc         8mo   -                 *↑     ../api-flink-spike
 
-flags: M main  @ current  * dirty  ↑ unpushed  L locked  P prunable  d detached  ✓ in default branch
+flags: M main  @ current  * dirty  ↑ unpushed  L locked  P prunable  d detached  ✓ in default branch   path: · in ~/.wtree/<repo>/<branch>
 ```
 
 ## Install
@@ -62,13 +62,97 @@ to start the required checks before merging it.
 
 ```sh
 wtree                                  # every worktree, oldest first
-wtree --size                           # measure disk usage with du
+wtree -s                               # -s / --size: measure disk usage with du
 wtree --pr-state merged,closed         # only worktrees whose PR is done
+wtree --done                           # same as --pr-state merged,closed
 wtree --older-than 3mo                 # only worktrees older than three months
 wtree --branch 'feat/*'                # glob on branch name
 wtree --prunable                       # only ones git would prune
-wtree --json                           # machine readable
+wtree -j                               # -j / --json: machine readable
 ```
+
+A PATH of `·` means the worktree is at its default location,
+`~/.wtree/<repo>/<branch>` (see `wtree new`). The main worktree and worktrees
+elsewhere show their path. Piped output and `--json` always have the full path.
+
+On a terminal, the list ends with hints when there is something to clean up,
+for example `2 worktrees have merged/closed PRs — run wtree clean --done` or
+`1 prunable — run wtree prune`.
+
+### `wtree new`
+
+Creates a worktree for a branch and prints its path. New worktrees live under
+`~/.wtree/<repo>/<branch>`, where `<repo>` is the name of the main worktree's
+directory. A branch with slashes nests: `feat/foo` in `api` lands in
+`~/.wtree/api/feat/foo`.
+
+```sh
+wtree new feat/foo                     # local branch, else origin/feat/foo, else a new branch
+wtree new feat/foo --from origin/dev   # start a new branch from origin/dev
+wtree new feat/foo --no-fetch          # do not ask origin first
+```
+
+The start point is picked in this order:
+
+1. The local branch, if it exists.
+2. `origin/<branch>`, after a `git fetch` of that one branch. The new local
+   branch tracks it.
+3. The `--from` base, or the remote default branch (usually `origin/main`). The
+   new branch has **no upstream**, so a bare `git push` cannot land on main.
+
+If the fetch fails for any reason other than "the remote has no such branch", for
+example no network, `wtree new` warns and carries on offline. If the branch
+already has a worktree, `wtree new` prints that worktree's path and creates
+nothing. If the target directory already exists, it exits **1**.
+
+### `wtree go`
+
+Picks a worktree or branch and prints its path. It uses `fzf` when it is
+installed, and a numbered list otherwise. Existing worktrees come first, then
+branches without a worktree, most recent commit first. Picking a branch without a
+worktree creates one, as `wtree new` would.
+
+```sh
+wtree go                               # pick from everything
+wtree go auth                          # start the picker filtered on "auth"
+wtree go feat/foo                      # exact branch: no picker
+```
+
+If you cancel, or nothing matches, `wtree go` exits **1** and prints nothing.
+Without a terminal it exits **2**. It does not call GitHub, so it starts
+quickly.
+
+### `wtree path`
+
+Prints the path of an existing worktree. `<name>` can be an exact branch, an
+exact path, or a substring of either that matches only one worktree. No match
+exits **1**. More than one match exits **2** and lists the matches on stderr.
+
+```sh
+cd "$(wtree path feat/foo)"
+```
+
+### Shell integration
+
+`new`, `go` and `path` print exactly one line on stdout, the path. Everything
+else goes to stderr. A program cannot change its parent shell's directory, so
+`wtree shell-init` prints a small `wt` function that does the `cd` for you. Add
+this line to `~/.zshrc` (or `~/.bashrc` with `bash`):
+
+```sh
+eval "$(wtree shell-init zsh)"
+```
+
+Then:
+
+```sh
+wt go                                  # pick, then cd there
+wt new feat/x                          # create, then cd there
+wt path main                           # cd back to main
+wt ui                                  # browse; press o to cd into a worktree
+```
+
+Other subcommands pass straight through to `wtree`.
 
 ### `wtree clean`
 
@@ -77,16 +161,39 @@ before touching anything.
 
 ```sh
 wtree clean --pr-state merged,closed --older-than 3mo    # plan, then "Remove 3 worktrees? [y/N]"
+wtree clean --done                                       # --done = --pr-state merged,closed
 wtree clean --prunable -n                                # -n / --dry-run: plan only, never asks
-wtree clean --pr-state merged -y --delete-branch         # -y / --yes: no prompt, for scripts
+wtree clean --pr-state merged -y -d                      # -y / --yes: no prompt; -d / --delete-branch
 ```
+
+Short flags: `-n` dry run, `-y` yes, `-f` force, `-d` delete branch, `-j` JSON.
+A skipped worktree says how to get past the block when a flag can:
+`(--force to override)` or `(try --refresh)`. Each removed worktree whose branch
+survived gets a `restore: wtree new <branch>` line. After a removal under
+`~/.wtree/<repo>/`, empty parent directories such as `feat/` are removed too.
 
 With no terminal to ask at (a pipe, a script, an agent, or `--json`), `clean`
 prints the plan and exits **2** unless you passed `--yes` or `--dry-run`. It will
 not block on a prompt nobody can answer, and it will not delete unasked.
 
-`clean` refuses to run without a filter. Pass `--all` if you really mean every
-non-main worktree.
+A bare `wtree clean` with no filter opens `wtree ui` to pick worktrees by hand,
+but only on a terminal and without `--json`, `--yes` or `--dry-run`. In every
+other case it exits **2** without a filter. Pass `--all` if you really mean
+every non-main worktree.
+
+### `wtree rm`
+
+Removes worktrees by exact name. Each `<name>` must be a worktree's exact branch
+or exact path (relative paths resolve against the current directory). A
+substring never matches, because this deletes. If any name matches nothing,
+`rm` exits **2**, lists close matches on stderr, and removes nothing.
+
+```sh
+wtree rm feat/foo                      # plan, then ask
+wtree rm feat/foo ../api-spike -y -d   # two worktrees, no prompt, delete branches
+```
+
+`rm` uses the same plan, confirmation, safety rules and options as `clean`.
 
 ### Prunable worktrees
 
@@ -107,8 +214,10 @@ Wraps `git worktree prune`. Shows what it would drop, then asks. Same
 
 ### `wtree ui`
 
-Interactive browser: move, multi-select, filter, and delete. Refuses to start
-when stdout is not a terminal, so it can never hang a script or an agent.
+Interactive browser: move, multi-select, filter, create, open, and delete. It
+draws on the terminal (`/dev/tty`), so stdout carries only the path you open
+with `o`; with the `wt` wrapper, `wt ui` then `o` changes into that worktree.
+Without a terminal it exits **2**, so it can never hang a script or an agent.
 
 | Key | Action |
 | --- | --- |
@@ -118,9 +227,12 @@ when stdout is not a terminal, so it can never hang a script or an agent.
 | `a` / `F` | Select all removable / all force-removable |
 | `c` | Clear the whole selection |
 | `/` | Filter by branch or path. `s` sorts, `p` cycles PR state |
-| `Enter` | Detail pane. `r` refresh, `S` measure sizes |
+| `Enter` | Detail pane. There, `w` opens the PR, `y` copies the path |
+| `o` | Open: exit and print the worktree's path |
+| `n` | New worktree for a branch |
 | `d` | Delete the selection, with a confirmation screen first |
-| `b` | Toggle branch deletion |
+| `b` | Toggle branch deletion. `r` refresh, `S` measure sizes |
+| `?` | All keys |
 | `q`, `Esc` | Quit |
 
 `f` cannot override the main worktree or the one you are standing in. The
@@ -143,7 +255,7 @@ Use `--age-by checkout` or `--age-by created` if you want the other reading.
 
 ## Safety rules
 
-`clean` never removes:
+`clean` and `rm` never remove:
 
 | blocked | cleared by `--force`? |
 | --- | --- |
@@ -161,7 +273,7 @@ asked it to clean up. Every other branch uses `-d` and survives if it is not ful
 merged. `--force-branch-delete` forces `-D` for all of them.
 
 **Fail closed on unknown PR state.** If `gh` is missing, unauthenticated, or the
-network is down, `wtree clean --pr-state ...` exits **3** with an error rather
+network is down, `wtree clean --pr-state ...` (or `--done`) exits **3** with an error rather
 than reporting that nothing matched. "Could not check" and "nothing to clean" are
 different answers, and a caller that cannot tell them apart will delete the wrong
 thing or skip the right one.
