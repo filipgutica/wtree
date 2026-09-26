@@ -18,6 +18,14 @@ flags: M main  @ current  * dirty  ↑ unpushed  L locked  P prunable  d detache
 
 ## Install
 
+With Homebrew:
+
+```sh
+brew install filipgutica/tap/wtree
+```
+
+To build and link a local checkout:
+
 ```sh
 npm install
 npm run build
@@ -27,6 +35,26 @@ npm link      # puts `wtree` on your PATH
 Requires git and Node 20+. [`gh`](https://cli.github.com) is optional: without it
 (or offline, or on a non-GitHub remote) PR state shows as `?` and everything else
 still works.
+
+## Releases
+
+Changes to `main` go through pull requests. Use Conventional Commit PR titles
+and squash merge so the title becomes the release commit:
+
+- `fix: ...` releases a patch version.
+- `feat: ...` releases a minor version.
+- `feat!: ...`, another type with `!`, or a `BREAKING CHANGE:` commit-body footer
+  releases a major version, including before 1.0.
+
+Release Please opens a release PR to update `package.json`, the lockfile,
+changelog, and version manifest. Merging that PR creates a `v`-prefixed tag and
+GitHub release. This workflow does not publish to npm.
+
+The repository must allow GitHub Actions to create pull requests (Settings →
+Actions → General → Workflow permissions → **Allow GitHub Actions to create and
+approve pull requests**). PRs created with `GITHUB_TOKEN` do not trigger the PR
+checks automatically. On the release PR, select **Approve workflows to run**
+to start the required checks before merging it.
 
 ## Commands
 
