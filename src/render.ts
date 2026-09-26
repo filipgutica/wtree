@@ -1,12 +1,25 @@
 import { relative } from 'node:path';
 import { ageDays, prStateOf } from './filter.js';
-import type { Plan } from './clean.js';
+import type { Block, Plan, RemovalResult } from './clean.js';
+import { isDefaultLocation } from './create.js';
 import type { AgeBasis, Worktree } from './types.js';
 
 const ESC = '[';
 
+let forceColor = false;
+
+/**
+ * The TUI draws on /dev/tty while stdout may be a pipe (`p=$(wtree ui)`), so it
+ * switches colour on for its own rendering and off again when it exits.
+ */
+export const setColorOverride = (enabled: boolean): void => {
+  forceColor = enabled;
+};
+
 export const colorsEnabled = (): boolean =>
-  !process.env['NO_COLOR'] && process.env['TERM'] !== 'dumb' && process.stdout.isTTY === true;
+  !process.env['NO_COLOR'] &&
+  process.env['TERM'] !== 'dumb' &&
+  (forceColor || process.stdout.isTTY === true);
 
 const useColor = colorsEnabled;
 
@@ -159,11 +172,41 @@ export const shortPath = (path: string, cwd: string): string => {
   return home && path.startsWith(home) ? `~${path.slice(home.length)}` : path;
 };
 
+/**
+ * The PATH cell. A worktree at its default `~/.wtree/<repo>/<branch>` location
+ * shows `·`: the path is predictable from the branch and would only add noise.
+ * `mainPath` must come from the unfiltered list, since filters can drop main.
+ */
+export const displayPath = ({
+  wt,
+  cwd,
+  mainPath,
+}: {
+  wt: Worktree;
+  cwd: string;
+  mainPath: string | null;
+}): string => {
+  if (wt.missing) return paint(shortPath(wt.path, cwd), 'red');
+  if (
+    !wt.isMain &&
+    wt.branch !== null &&
+    mainPath !== null &&
+    isDefaultLocation({ path: wt.path, mainPath, branch: wt.branch })
+  ) {
+    return paint('·', 'dim');
+  }
+  return shortPath(wt.path, cwd);
+};
+
 export interface ListRenderOptions {
   worktrees: Worktree[];
   ageBasis: AgeBasis;
   cwd: string;
   showSize: boolean;
+  /** Path of the main worktree, for spotting default locations. */
+  mainPath?: string | null;
+  /** Use compact paths only when the caller also prints their legend. */
+  compactPaths?: boolean;
   now?: Date;
 }
 
@@ -172,6 +215,8 @@ export const renderList = ({
   ageBasis,
   cwd,
   showSize,
+  mainPath = null,
+  compactPaths = false,
   now = new Date(),
 }: ListRenderOptions): string => {
   const headers = ['BRANCH', 'AGE', 'PR', ...(showSize ? ['SIZE'] : []), 'FLAGS', 'PATH'];
@@ -181,7 +226,7 @@ export const renderList = ({
     formatPr(wt),
     ...(showSize ? [formatSize(wt.sizeKb)] : []),
     flags(wt),
-    wt.missing ? paint(shortPath(wt.path, cwd), 'red') : shortPath(wt.path, cwd),
+    compactPaths ? displayPath({ wt, cwd, mainPath }) : wt.path,
   ]);
   return table(headers, rows);
 };
@@ -202,7 +247,47 @@ const LEGEND_ENTRIES: [string, ColorName, string][] = [
  * Labels stay plain: dimming the whole line makes it vanish on some themes.
  */
 export const legend = (): string =>
-  `flags: ${LEGEND_ENTRIES.map(([glyph, color, label]) => `${paint(glyph, color)} ${label}`).join('  ')}`;
+  `flags: ${LEGEND_ENTRIES.map(([glyph, color, label]) => `${paint(glyph, color)} ${label}`).join('  ')}` +
+  `   path: ${paint('·', 'dim')} in ~/.wtree/<repo>/<branch>`;
+
+/** Next steps suggested under `wtree list`. Plain text; the caller paints it. */
+export const listHints = (worktrees: Worktree[]): string[] => {
+  const hints: string[] = [];
+  const done = worktrees.filter((wt) => {
+    const state = prStateOf(wt);
+    return state === 'merged' || state === 'closed';
+  }).length;
+  if (done > 0) {
+    hints.push(
+      done === 1
+        ? '1 worktree has a merged/closed PR — run wtree clean --done'
+        : `${done} worktrees have merged/closed PRs — run wtree clean --done`,
+    );
+  }
+  const prunable = worktrees.filter((wt) => wt.prunable).length;
+  if (prunable > 0) hints.push(`${prunable} prunable — run wtree prune`);
+  return hints;
+};
+
+/** How to get past a skipped worktree's blocks, as a suffix ('' when nothing helps). */
+export const unblockHint = (blocks: Block[]): string => {
+  if (blocks.length === 0) return '';
+  if (blocks.some((b) => b.code === 'pr-unknown')) return ' (try --refresh)';
+  if (blocks.every((b) => b.force)) return ' (--force to override)';
+  return '';
+};
+
+/**
+ * A removed worktree whose branch survived can be recreated from that branch.
+ * `branch` is the worktree's branch, which the caller supplies even when
+ * branch deletion was not requested.
+ */
+export const restoreHint = (
+  result: Pick<RemovalResult, 'removed' | 'branch' | 'branchDeleted'>,
+): string | null =>
+  result.removed && result.branch && !result.branchDeleted
+    ? `restore: wtree new ${result.branch}`
+    : null;
 
 export const renderPlan = (plans: Plan[], cwd: string, ageBasis: AgeBasis): string => {
   const lines: string[] = [];
@@ -244,7 +329,7 @@ export const renderPlan = (plans: Plan[], cwd: string, ageBasis: AgeBasis): stri
     for (const plan of skipped) {
       lines.push(
         `  ${paint('·', 'dim')} ${shortPath(plan.worktree.path, cwd)} ${paint(
-          `— ${plan.blocks.map((b) => b.message).join('; ')}`,
+          `— ${plan.blocks.map((b) => b.message).join('; ')}${unblockHint(plan.blocks)}`,
           'dim',
         )}`,
       );

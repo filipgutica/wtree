@@ -1,5 +1,9 @@
+import { spawnSync } from 'node:child_process';
+import { closeSync, existsSync, openSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { emitKeypressEvents } from 'node:readline';
 import type { Key } from 'node:readline';
+import { ReadStream, WriteStream } from 'node:tty';
 
 import {
   execute,
@@ -19,12 +23,16 @@ import {
   formatSize,
   BRANCH_MAX,
   clampAnsi,
+  displayPath,
   highlightRow,
   legend,
   paint,
+  restoreHint,
+  setColorOverride,
   shortPath,
   visibleWidth,
 } from './render.js';
+import { run } from './exec.js';
 import type { AgeBasis, Worktree } from './types.js';
 
 export interface TuiOptions {
@@ -35,13 +43,74 @@ export interface TuiOptions {
   showSize: boolean;
   /** Re-run collection (used by the refresh key). */
   reload: (opts: { refresh: boolean; size: boolean }) => Promise<Collection>;
+  /** Create a worktree for `branch` (the `n` key). May reject; the message is shown. */
+  create: (branch: string) => Promise<{ path: string; created: boolean; warnings: string[] }>;
 }
 
-type Screen = 'list' | 'detail' | 'confirm' | 'working' | 'results';
+export interface TuiResult {
+  code: number;
+  /** Worktree the user chose to open with `o`; the caller prints it to stdout. */
+  openPath: string | null;
+}
+
+/** Every key, for the `?` screen. The footer only shows the essentials. */
+export const HELP_ENTRIES: readonly (readonly [key: string, description: string])[] = [
+  ['j / k, arrows', 'move the cursor (scroll on paged screens)'],
+  ['g / G', 'jump to the top / bottom'],
+  ['Space', 'select or unselect the worktree under the cursor'],
+  ['f', 'force-select a dirty, unpushed or locked worktree'],
+  ['a', 'select every removable worktree'],
+  ['F', 'select every removable worktree, forcing where needed'],
+  ['c / A', 'clear the selection'],
+  ['/', 'filter by branch or path (Enter applies, Esc cancels)'],
+  ['s', 'cycle the sort key'],
+  ['p', 'cycle the PR filter'],
+  ['b', 'toggle deleting branches along with worktrees'],
+  ['r', 'refresh worktrees and PR state'],
+  ['S', 'show or hide the size column'],
+  ['Enter', 'show details for the worktree under the cursor'],
+  ['o', 'open the worktree: exit and print its path'],
+  ['n', 'create a worktree for a new or existing branch'],
+  ['d', 'delete the selection, or the worktree under the cursor'],
+  ['w', 'detail screen: open the PR in the browser'],
+  ['y', 'detail screen: copy the worktree path'],
+  ['y / b / Esc', 'confirm screen: remove / toggle branch deletion / cancel'],
+  ['?', 'show this help'],
+  ['q / Esc', 'quit (Esc goes back on other screens)'],
+  ['Ctrl-C', 'quit from any screen'],
+];
+
+/**
+ * OSC 52 asks the terminal to set its clipboard. It works over SSH and in
+ * terminals that allow it; others ignore it, hence "best effort".
+ */
+export const osc52 = (text: string): string =>
+  `\u001b]52;c;${Buffer.from(text, 'utf8').toString('base64')}\u0007`;
+
+// Lives in render.ts so the CLI shares it; re-exported for existing callers.
+export { restoreHint } from './render.js';
+
+type Screen = 'list' | 'detail' | 'help' | 'confirm' | 'working' | 'results';
 type PrFilter = 'all' | 'merged+closed' | 'open' | 'none';
 
 const SORT_KEYS: readonly SortKey[] = ['age', 'path', 'branch', 'size', 'pr'];
 const ESC = '\u001b[';
+
+/** Reserve one row each for the title and footer of every paged screen. */
+export const pagedWindow = ({
+  rows,
+  contentLength,
+  scroll,
+}: {
+  rows: number;
+  contentLength: number;
+  scroll: number;
+}): { start: number; end: number; maxScroll: number } => {
+  const capacity = Math.max(1, rows - 2);
+  const maxScroll = Math.max(0, contentLength - capacity);
+  const start = Math.max(0, Math.min(scroll, maxScroll));
+  return { start, end: start + capacity, maxScroll };
+};
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -72,17 +141,41 @@ const renderCells = (headers: string[], rows: string[][]): string[] => {
 };
 
 /**
+ * Open /dev/tty as separate read and write streams, so destroying one cannot
+ * close the other's descriptor. Null when there is no controlling terminal.
+ */
+const openTerminal = (): { input: ReadStream; output: WriteStream } | null => {
+  let readFd: number | null = null;
+  let writeFd: number | null = null;
+  let input: ReadStream | null = null;
+  try {
+    readFd = openSync('/dev/tty', 'r');
+    writeFd = openSync('/dev/tty', 'w');
+    input = new ReadStream(readFd);
+    return { input, output: new WriteStream(writeFd) };
+  } catch {
+    // Any failure here (typically ENXIO: no controlling terminal) means the TUI
+    // cannot run; the caller reports that. Release whatever was opened.
+    if (input) input.destroy();
+    else if (readFd !== null) closeSync(readFd);
+    if (writeFd !== null) closeSync(writeFd);
+    return null;
+  }
+};
+
+/**
  * Runs the interactive worktree view. Terminal restoration is kept in the
  * outer finally because reload and deletion both cross asynchronous boundaries.
  */
-export const runTui = async (options: TuiOptions): Promise<number> => {
-  const stdin = process.stdin;
-  const stdout = process.stdout;
-
-  if (!stdin.isTTY || !stdout.isTTY) {
-    process.stderr.write('wtree tui requires an interactive terminal\n');
-    return 2;
+export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
+  // Draw and read on the controlling terminal, not stdout/stdin: under
+  // `p=$(wtree ui)` stdout is a pipe that must carry only the chosen path.
+  const terminal = openTerminal();
+  if (!terminal) {
+    process.stderr.write('wtree ui needs an interactive terminal. Use `wtree list --json` instead.\n');
+    return { code: 2, openPath: null };
   }
+  const { input, output } = terminal;
 
   let collection = options.collection;
   let showSize = options.showSize;
@@ -99,6 +192,10 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
   let pathFilter = '';
   let filterDraft = '';
   let filterMode = false;
+  let createDraft = '';
+  let createMode = false;
+  let helpScroll = 0;
+  let detailScroll = 0;
   let deleteBranch = false;
   let pendingTargets: Worktree[] = [];
   let pendingPlans: Plan[] = [];
@@ -108,11 +205,11 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
   let resultScroll = 0;
   let busy = false;
   let rawModeEnabled = false;
-  let resolveExit: ((code: number) => void) | null = null;
+  let resolveExit: ((result: TuiResult) => void) | null = null;
 
-  const finish = (code: number): void => {
+  const finish = (code: number, openPath: string | null = null): void => {
     if (resolveExit) {
-      resolveExit(code);
+      resolveExit({ code, openPath });
       resolveExit = null;
     }
   };
@@ -312,7 +409,7 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
       `PR state: ${formatPr(wt)}`,
       ...prLines,
       '',
-      paint('Press Enter or Esc to return.', 'dim'),
+      paint('o open   w PR in browser   y copy path   Enter or Esc return', 'dim'),
     ];
   };
 
@@ -332,11 +429,20 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
         formatPr(wt),
         ...(showSize ? [formatSize(wt.sizeKb)] : []),
         flags(wt),
-        wt.missing ? paint(shortPath(wt.path, options.cwd), 'red') : shortPath(wt.path, options.cwd),
+        displayPath({
+          wt,
+          cwd: options.cwd,
+          mainPath: collection.worktrees.find((w) => w.isMain)?.path ?? null,
+        }),
       ];
     });
 
-  const width = (): number => Math.max(20, stdout.columns || 80);
+  // getWindowSize() returns cached properties. Refresh them on SIGWINCH using
+  // a new stream; Node only refreshes process.stdout's stream automatically.
+  let dimensions = { columns: output.columns || 80, rows: output.rows || 24 };
+  const terminalSize = (): { columns: number; rows: number } => dimensions;
+
+  const width = (): number => Math.max(20, terminalSize().columns);
 
   /** Nothing may wrap: a wrapped line costs a row the layout did not budget for. */
   const clampLines = (lines: string[]): string[] => lines.map((l) => clampAnsi(l, width()));
@@ -353,7 +459,7 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
 
   const renderList = (): void => {
     const visible = getVisibleWorktrees();
-    const height = Math.max(1, stdout.rows || 24);
+    const height = Math.max(1, terminalSize().rows);
     // header, filters, legend, table header, footer, status.
     const rowCapacity = Math.max(0, height - 6);
     if (visible.length === 0) cursor = 0;
@@ -377,10 +483,10 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
       filterMode ? `/${filterDraft}_` : pathFilter || 'none'
     }  age: ${options.ageBasis}  delete branches: ${deleteBranch ? 'on' : 'off'}`;
     const footer = fit(
-      'j/k move  g/G top/bottom  Space select  f force  a select all  F force all  c clear all  / filter  s sort  p PR  r refresh  S size  Enter details  d delete  b branches  q/Esc quit',
-      'j/k move  Space select  f force  a all  F force all  c clear  / filter  d delete  q quit',
+      'Space select · d delete · / filter · Enter details · o open · n new · ? help · q quit',
+      'Space sel · d del · / filter · o open · n new · ? help · q quit',
     );
-    const footerStatus = status ?? '';
+    const footerStatus = createMode ? `new worktree for branch: ${createDraft}_` : status ?? '';
     const headerLines = [header, filterLine, legend(), tableLines[0] ?? ''];
     const lines = [...headerLines, ...shownRows];
     while (lines.length < Math.max(0, height - 2)) lines.push('');
@@ -392,7 +498,7 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
     if (visible.length > 0 && cursorLine >= headerLines.length && cursorLine < headerLines.length + shownRows.length) {
       clamped[cursorLine] = highlightRow(clamped[cursorLine] ?? '', width());
     }
-    stdout.write(`${ESC}2J${ESC}H${clamped.join('\n')}`);
+    output.write(`${ESC}2J${ESC}H${clamped.join('\n')}`);
   };
 
   const renderPaged = (
@@ -401,14 +507,12 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
     scroll: number,
     hints: [full: string, short: string],
   ): void => {
-    const height = Math.max(1, stdout.rows || 24);
-    const capacity = Math.max(1, height - 2);
-    const maxScroll = Math.max(0, content.length - capacity);
-    const start = Math.min(scroll, maxScroll);
-    const lines = [title, ...content.slice(start, start + capacity - 1)];
+    const height = Math.max(1, terminalSize().rows);
+    const { start, end } = pagedWindow({ rows: height, contentLength: content.length, scroll });
+    const lines = [title, ...content.slice(start, end)];
     while (lines.length < Math.max(1, height - 1)) lines.push('');
     lines.push(fit(hints[0], hints[1]));
-    stdout.write(`${ESC}2J${ESC}H${clampLines(lines).join('\n')}`);
+    output.write(`${ESC}2J${ESC}H${clampLines(lines).join('\n')}`);
   };
 
   const render = (): void => {
@@ -418,12 +522,18 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
         break;
       case 'detail': {
         const wt = currentWorktree();
-        renderPaged('wtree — worktree detail', wt ? detailLines(wt) : ['no worktree selected'], 0, [
-          'j/k or arrows scroll   Enter or Esc back to the list   q quit',
-          'j/k scroll  Esc back  q quit',
+        renderPaged('wtree — worktree detail', wt ? detailLines(wt) : ['no worktree selected'], detailScroll, [
+          'j/k scroll   o open   w PR in browser   y copy path   Enter or Esc back   q quit',
+          'j/k scroll  o open  w PR  y copy  Esc back  q quit',
         ]);
         break;
       }
+      case 'help':
+        renderPaged('wtree — keys', helpLines(), helpScroll, [
+          'j/k scroll   Esc, Enter or ? back to the list   q quit',
+          'j/k scroll  Esc back  q quit',
+        ]);
+        break;
       case 'confirm': {
         const content = [
           paint(
@@ -452,8 +562,8 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
         break;
       case 'results':
         renderPaged('wtree — deletion results', resultLines, resultScroll, [
-          'any key returns to the list   q quit',
-          'any key back  q quit',
+          'j/k scroll   Enter or Esc returns to the list   q quit',
+          'j/k scroll  Enter back  q quit',
         ]);
         break;
     }
@@ -518,6 +628,15 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
           : '';
         lines.push(`${paint(result.note ? 'PRUNED ' : 'REMOVED', 'green')} ${path}${branch}`);
         if (result.note) lines.push(`  ${paint(result.note, 'yellow')}`);
+        // result.branch is only set when branch deletion was requested.
+        const hint = restoreHint({
+          ...result,
+          branch:
+            result.branch ??
+            plans.find((plan) => plan.worktree.path === result.path)?.worktree.branch ??
+            null,
+        });
+        if (hint) lines.push(`  ${paint(hint, 'dim')}`);
       } else {
         lines.push(`${paint('ERROR', 'red')} ${path} — ${result.error ?? 'removal failed'}`);
       }
@@ -526,7 +645,7 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
       }
     }
     if (lines.length === 0) lines.push(paint('nothing was removed.', 'dim'));
-    lines.push('', paint('Press any key to return to the list.', 'dim'));
+    lines.push('', paint('j/k scroll; Enter or Esc returns to the list.', 'dim'));
     return lines;
   };
 
@@ -637,6 +756,132 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
       status = oneLine(errorMessage(error));
     } finally {
       busy = false;
+      render();
+    }
+  };
+
+  const helpLines = (): string[] => {
+    const keyWidth = Math.max(...HELP_ENTRIES.map(([key]) => key.length));
+    return HELP_ENTRIES.map(([key, description]) => `${paint(key.padEnd(keyWidth), 'bold')}  ${description}`);
+  };
+
+  const showHelp = (): void => {
+    screen = 'help';
+    helpScroll = 0;
+    status = null;
+    render();
+  };
+
+  /** Exit and hand the path to the caller, which prints it for the shell wrapper to cd into. */
+  const openCurrent = (): void => {
+    const wt = currentWorktree();
+    if (!wt) {
+      status = 'no worktree is visible';
+      render();
+      return;
+    }
+    if (wt.missing || !existsSync(wt.path)) {
+      status = `cannot open ${shortPath(wt.path, options.cwd)}: its directory is missing`;
+      render();
+      return;
+    }
+    finish(0, wt.path);
+  };
+
+  const copyCurrentPath = (): void => {
+    const wt = currentWorktree();
+    if (!wt) {
+      status = 'no worktree selected';
+      return;
+    }
+    output.write(osc52(wt.path));
+    if (process.platform === 'darwin') {
+      // Deliberately unchecked: OSC 52 is the primary route, and pbcopy failing
+      // (missing, sandboxed) should not turn a best-effort copy into an error.
+      spawnSync('pbcopy', { input: wt.path });
+    }
+    status = 'copied path (best effort)';
+  };
+
+  const openCurrentPr = async (): Promise<void> => {
+    const wt = currentWorktree();
+    if (!wt || wt.pr.status !== 'found') {
+      status = 'no PR found for this worktree';
+      return;
+    }
+    status = `opening PR #${wt.pr.number} in the browser...`;
+    render();
+    const result = await run({
+      cmd: 'gh',
+      args: ['pr', 'view', String(wt.pr.number), '--web'],
+      cwd: options.repo.root,
+    });
+    status = result.ok
+      ? `opened PR #${wt.pr.number} in the browser`
+      : `gh pr view failed: ${oneLine(result.stderr.trim() || `exit code ${result.code}`)}`;
+  };
+
+  /** Put the cursor on `path` (or, failing that, `branch`); false when filters hide it. */
+  const focusWorktree = (path: string, branch: string): boolean => {
+    const target = resolve(path);
+    const visible = getVisibleWorktrees();
+    const byPath = visible.findIndex((wt) => resolve(wt.path) === target);
+    // git may report a different spelling of the same directory (macOS /var vs /private/var).
+    const index = byPath >= 0 ? byPath : visible.findIndex((wt) => wt.branch === branch);
+    if (index < 0) return false;
+    cursor = index;
+    return true;
+  };
+
+  const submitCreate = async (branch: string): Promise<void> => {
+    busy = true;
+    status = `creating worktree for ${branch}...`;
+    render();
+    try {
+      const created = await options.create(branch);
+      const reloaded = await reloadCollection({ refresh: false, size: showSize });
+      // reloadCollection clears status on success and sets it on failure.
+      const reloadNote = reloaded ? '' : `; ${status ?? 'reload failed'}`;
+      const where = shortPath(created.path, options.cwd);
+      const outcome = created.created ? `created ${where}` : `already exists at ${where}`;
+      const warnings = created.warnings.map(oneLine).join('; ');
+      const hidden = reloaded && !focusWorktree(created.path, branch) ? ' (hidden by the current filter)' : '';
+      status = `${outcome}${hidden}${warnings ? ` — ${warnings}` : ''}${reloadNote}`;
+    } catch (error) {
+      status = `create failed: ${oneLine(errorMessage(error))}`;
+    } finally {
+      busy = false;
+      render();
+    }
+  };
+
+  const handleCreateKey = async (str: string, key: Key): Promise<void> => {
+    if (isEscape(key)) {
+      createMode = false;
+      createDraft = '';
+      status = 'create cancelled';
+      render();
+      return;
+    }
+    if (isEnter(key)) {
+      const branch = createDraft.trim();
+      createMode = false;
+      createDraft = '';
+      if (!branch) {
+        status = 'create cancelled: no branch name';
+        render();
+        return;
+      }
+      await submitCreate(branch);
+      return;
+    }
+    if (key.name === 'backspace') {
+      createDraft = Array.from(createDraft).slice(0, -1).join('');
+      render();
+      return;
+    }
+    if (!key.ctrl && !key.meta && str >= ' ' && str !== '\u007f') {
+      createDraft += str;
       render();
     }
   };
@@ -797,11 +1042,26 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
     if (isEnter(key)) {
       if (currentWorktree()) {
         screen = 'detail';
+        detailScroll = 0;
         status = null;
       } else {
         status = 'no worktree is visible';
       }
       render();
+      return;
+    }
+    if (str === 'o') {
+      openCurrent();
+      return;
+    }
+    if (str === 'n') {
+      createMode = true;
+      createDraft = '';
+      render();
+      return;
+    }
+    if (str === '?') {
+      showHelp();
       return;
     }
     if (str === 'd') {
@@ -810,19 +1070,85 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
     }
   };
 
+  const handleDetailKey = async (str: string, key: Key): Promise<void> => {
+    const wt = currentWorktree();
+    const nextScroll = scrollForKey({ str, key, scroll: detailScroll, contentLength: wt ? detailLines(wt).length : 1 });
+    if (nextScroll !== null) {
+      detailScroll = nextScroll;
+      render();
+      return;
+    }
+    if (str === 'q') {
+      finish(0);
+      return;
+    }
+    if (isEscape(key) || isEnter(key)) {
+      screen = 'list';
+      render();
+      return;
+    }
+    if (str === 'o') {
+      openCurrent();
+      return;
+    }
+    if (str === '?') {
+      showHelp();
+      return;
+    }
+    if (str === 'y') {
+      copyCurrentPath();
+      render();
+      return;
+    }
+    if (str === 'w') {
+      busy = true;
+      try {
+        await openCurrentPr();
+      } finally {
+        busy = false;
+        render();
+      }
+    }
+  };
+
+  const scrollForKey = ({
+    str,
+    key,
+    scroll,
+    contentLength,
+  }: { str: string; key: Key; scroll: number; contentLength: number }): number | null => {
+    const { start, maxScroll } = pagedWindow({ rows: terminalSize().rows, contentLength, scroll });
+    if (key.name === 'down' || str === 'j') return Math.min(maxScroll, start + 1);
+    if (key.name === 'up' || str === 'k') return Math.max(0, start - 1);
+    if (str === 'g') return 0;
+    if (str === 'G' || isUpper(key, 'g')) return maxScroll;
+    return null;
+  };
+
   const handlePagedKey = (str: string, key: Key): void => {
     if (str === 'q') {
       finish(0);
       return;
     }
-    if (screen === 'detail') {
-      if (isEscape(key) || isEnter(key)) {
+    if (screen === 'help') {
+      if (isEscape(key) || isEnter(key) || str === '?') {
         screen = 'list';
         render();
+        return;
       }
+      const nextScroll = scrollForKey({ str, key, scroll: helpScroll, contentLength: helpLines().length });
+      if (nextScroll === null) return;
+      helpScroll = nextScroll;
+      render();
       return;
     }
     if (screen === 'results') {
+      const nextScroll = scrollForKey({ str, key, scroll: resultScroll, contentLength: resultLines.length });
+      if (nextScroll !== null) {
+        resultScroll = nextScroll;
+        render();
+        return;
+      }
       if (isEscape(key) || isEnter(key) || str) {
         screen = 'list';
         status = null;
@@ -832,12 +1158,8 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
     }
     if (screen === 'confirm') {
       const contentLength = renderPlanLines(pendingPlans).length + 2;
-      const capacity = Math.max(1, (stdout.rows || 24) - 3);
-      const maxScroll = Math.max(0, contentLength - capacity);
-      if (key.name === 'down' || str === 'j') confirmScroll = Math.min(maxScroll, confirmScroll + 1);
-      else if (key.name === 'up' || str === 'k') confirmScroll = Math.max(0, confirmScroll - 1);
-      else if (str === 'g') confirmScroll = 0;
-      else if (str === 'G' || isUpper(key, 'g')) confirmScroll = maxScroll;
+      const nextScroll = scrollForKey({ str, key, scroll: confirmScroll, contentLength });
+      if (nextScroll !== null) confirmScroll = nextScroll;
       else if (str === 'b') {
         togglePendingBranchDeletion();
       } else if (str === 'y') {
@@ -861,42 +1183,78 @@ export const runTui = async (options: TuiOptions): Promise<number> => {
       handleFilterKey(str, key);
       return;
     }
+    if (createMode) {
+      await handleCreateKey(str, key);
+      return;
+    }
     if (screen === 'list') await handleListKey(str, key);
+    else if (screen === 'detail') await handleDetailKey(str, key);
     else handlePagedKey(str, key);
   };
 
+  /** First unexpected error; the TUI exits, restores the terminal, then rethrows it. */
+  const failures: unknown[] = [];
+  const fail = (error: unknown): void => {
+    failures.push(error);
+    finish(1);
+  };
+
   const onKeypress = (str: string, key: Key): void => {
-    void handleKeypress(str, key);
+    handleKeypress(str, key).catch(fail);
   };
   const onResize = (): void => {
-    if (resolveExit) render();
+    let fd: number | null = null;
+    let resized: WriteStream | null = null;
+    try {
+      fd = openSync('/dev/tty', 'w');
+      resized = new WriteStream(fd);
+      dimensions = { columns: resized.columns || 80, rows: resized.rows || 24 };
+      if (resolveExit) render();
+    } catch (error) {
+      fail(error);
+    } finally {
+      if (resized) resized.destroy();
+      else if (fd !== null) closeSync(fd);
+    }
   };
   const onSigint = (): void => finish(130);
 
   try {
-    emitKeypressEvents(stdin);
-    stdin.setRawMode(true);
+    setColorOverride(true);
+    // Left attached through teardown so a failing final write cannot crash the process.
+    input.on('error', fail);
+    output.on('error', fail);
+    emitKeypressEvents(input);
+    input.setRawMode(true);
     rawModeEnabled = true;
-    stdin.resume();
-    stdin.on('keypress', onKeypress);
-    stdout.on('resize', onResize);
+    input.resume();
+    input.on('keypress', onKeypress);
+    // A WriteStream on /dev/tty never emits 'resize'; only process.stdout does.
+    process.on('SIGWINCH', onResize);
     process.once('SIGINT', onSigint);
-    stdout.write(`${ESC}?1049h${ESC}?25l${ESC}2J${ESC}H`);
+    output.write(`${ESC}?1049h${ESC}?25l${ESC}2J${ESC}H`);
     render();
-    const result = await new Promise<number>((resolve) => {
-      resolveExit = resolve;
+    const result = await new Promise<TuiResult>((done) => {
+      resolveExit = done;
     });
+    if (failures.length > 0) throw failures[0];
     return result;
   } finally {
-    stdin.off('keypress', onKeypress);
-    stdout.off('resize', onResize);
+    input.off('keypress', onKeypress);
+    process.off('SIGWINCH', onResize);
     process.off('SIGINT', onSigint);
-    try {
-      stdout.write(`${ESC}?25h${ESC}?1049l${ESC}0m`);
-    } finally {
-      if (rawModeEnabled) stdin.setRawMode(false);
-      stdin.pause();
-    }
     resolveExit = null;
+    try {
+      output.write(`${ESC}?25h${ESC}?1049l${ESC}0m`);
+    } finally {
+      try {
+        if (rawModeEnabled) input.setRawMode(false);
+      } finally {
+        // An undestroyed ReadStream keeps the event loop alive after quitting.
+        input.destroy();
+        output.destroy();
+        setColorOverride(false);
+      }
+    }
   }
 };
