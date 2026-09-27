@@ -233,8 +233,14 @@ Without a terminal it exits **2**, so it can never hang a script or an agent.
 | `n` | New worktree for a branch |
 | `d` | Review removal of the whole selection, or the focused worktree, then confirm |
 | `b` | Toggle branch deletion. `r` refresh, `S` measure sizes |
-| `?` | All keys and the flags/path legend |
+| `?` | Toggle the help popup with shortcuts and the flags/path legend |
 | `q`, `Esc` | Quit |
+
+The help popup keeps the list visible behind it. Use `j`/`k` or arrows to scroll,
+`g`/`G` for the top/bottom, and `Esc`, `Enter` or `?` to close it. Cyan marks
+shortcuts; green marks selection, yellow marks forceable blocks, and red marks
+forced selection. Protected rows stay muted. All states keep their text labels
+with `NO_COLOR`.
 
 The header shows the visible row range. Long branches and paths keep both ends;
 `Enter` shows their complete values. `[-]` marks a blocked worktree, and the

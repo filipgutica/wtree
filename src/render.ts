@@ -260,7 +260,7 @@ export const renderList = ({
   return table(headers, rows);
 };
 
-const LEGEND_ENTRIES: [string, ColorName, string][] = [
+export const FLAG_LEGEND_ENTRIES: readonly (readonly [string, ColorName, string])[] = [
   ['M', 'blue', 'main'],
   ['@', 'cyan', 'current'],
   ['*', 'yellow', 'dirty'],
@@ -276,7 +276,7 @@ const LEGEND_ENTRIES: [string, ColorName, string][] = [
  * Labels stay plain: dimming the whole line makes it vanish on some themes.
  */
 export const legend = (): string =>
-  `flags: ${LEGEND_ENTRIES.map(([glyph, color, label]) => `${paint(glyph, color)} ${label}`).join('  ')}` +
+  `flags: ${FLAG_LEGEND_ENTRIES.map(([glyph, color, label]) => `${paint(glyph, color)} ${label}`).join('  ')}` +
   `   path: ${paint('·', 'dim')} in ~/.wtree/<repo>/<branch>`;
 
 /** Next steps suggested under `wtree list`. Plain text; the caller paints it. */
