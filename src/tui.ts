@@ -24,7 +24,7 @@ import {
   formatSize,
   clampAnsi,
   highlightRow,
-  legend,
+  FLAG_LEGEND_ENTRIES,
   paint,
   restoreHint,
   setColorOverride,
@@ -122,6 +122,20 @@ const wrapLine = (line: string, columns: number): string[] => {
   if (plain.length === 0) return [''];
   const rows: string[] = [];
   for (let start = 0; start < plain.length; start += columns) rows.push(plain.slice(start, start + columns));
+  return rows;
+};
+
+/** Help prose wraps at words; worktree identities keep their exact characters. */
+const wrapWords = (text: string, columns: number): string[] => {
+  let remaining = text.replace(/\u001b\[[0-9;]*m/g, '');
+  const rows: string[] = [];
+  while (remaining.length > columns) {
+    const space = remaining.lastIndexOf(' ', columns);
+    const end = space > 0 ? space : columns;
+    rows.push(remaining.slice(0, end));
+    remaining = remaining.slice(end).trimStart();
+  }
+  rows.push(remaining);
   return rows;
 };
 
@@ -430,7 +444,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
       index === cursor ? paint('>', 'cyan') : ' ',
       forced.has(wt.path) ? paint('[!]', 'red')
         : selected.has(wt.path) ? paint('[x]', 'green')
-          : isRemovable(wt) ? '[ ]' : paint('[-]', 'dim'),
+          : isRemovable(wt) ? '[ ]' : paint('[-]', isForceRemovable(wt) ? 'yellow' : 'dim'),
       '',
       ...(showMetadata ? [formatAge(ageDays(wt, options.ageBasis)), formatPr(wt), ...(showSize ? [formatSize(wt.sizeKb)] : [])] : []),
       ...(showFlags ? [flags(wt)] : []),
@@ -470,7 +484,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
   const fit = (full: string, short: string): string =>
     visibleWidth(full) <= width() ? full : short;
 
-  const renderList = (): void => {
+  const listLines = (): string[] => {
     const visible = getVisibleWorktrees();
     const height = Math.max(1, terminalSize().rows);
     // repo, filters, removal scope, table header, footer, status.
@@ -500,8 +514,8 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
     const filterLine = `${range} · s sort: ${sortKey} · p PR: ${prFilter} · filter: ${filterMode ? `/${filterDraft}_` : pathFilter || 'none'} · age: ${options.ageBasis}`;
     const removalScope = selected.size > 0 ? String(selected.size) : 'focused';
     const footer = fit(
-      `o open · Enter details · / filter · n new · Space select · d review removal (${removalScope}) · ? help · q quit`,
-      `o open · Enter details · / filter · n new · d review (${removalScope}) · ? help`,
+      `o open · Enter details · / filter · n new · Space select · d review removal (${removalScope}) · ? keys/flags · q quit`,
+      `o open · Enter details · / filter · n new · d review (${removalScope}) · ? keys/flags`,
     );
     const focused = visible[cursor];
     const blocks = focused ? planFor(focused).blocks : [];
@@ -524,7 +538,11 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
     if (visible.length > 0 && cursorLine >= headerLines.length && cursorLine < headerLines.length + shownRows.length) {
       clamped[cursorLine] = highlightRow(clamped[cursorLine] ?? '', width());
     }
-    output.write(`${ESC}2J${ESC}H${clamped.join('\n')}`);
+    return clamped;
+  };
+
+  const renderList = (): void => {
+    output.write(`${ESC}2J${ESC}H${listLines().join('\n')}`);
   };
 
   const renderPaged = (
@@ -555,10 +573,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
         break;
       }
       case 'help':
-        renderPaged('wtree — keys and legend', helpLines(), helpScroll, [
-          'j/k scroll   Esc, Enter or ? back to the list   q quit',
-          'j/k scroll  Esc back  q quit',
-        ]);
+        renderHelp();
         break;
       case 'confirm': {
         const content = confirmationLines();
@@ -788,16 +803,89 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
     }
   };
 
+  const helpSize = (): { columns: number; rows: number } => ({
+    columns: Math.min(110, width() - 4),
+    rows: Math.max(4, terminalSize().rows - 4),
+  });
+
   const helpLines = (): string[] => {
-    const keyWidth = Math.max(...HELP_ENTRIES.map(([key]) => key.length));
-    return [
-      ...HELP_ENTRIES.flatMap(([key, description]) => wrapLine(`${key.padEnd(keyWidth)}  ${description}`, width())),
+    const columns = helpSize().columns - 4;
+    const sideBySide = columns >= 64;
+    const legendWidth = sideBySide ? Math.min(32, Math.floor(columns * 0.4)) : columns;
+    const keysWidth = sideBySide ? columns - legendWidth - 3 : columns;
+    const keyWidth = Math.min(14, Math.max(1, keysWidth - 4));
+    const keys = [paint('Shortcuts', 'bold'), ...HELP_ENTRIES.flatMap(([key, description]) => {
+      if (key.length > keyWidth) {
+        return [
+          ...wrapWords(key, keysWidth).map((line) => paint(line, 'cyan')),
+          ...wrapWords(description, keysWidth),
+        ];
+      }
+      return wrapWords(description, Math.max(1, keysWidth - keyWidth - 2)).map((line, index) =>
+        `${index === 0 ? paint(key.padEnd(keyWidth), 'cyan') : ' '.repeat(keyWidth)}  ${line}`,
+      );
+    })];
+    const markers = [
+      ['[ ]', 'removable', null],
+      ['[x]', 'selected', 'green'],
+      ['[!]', 'force selected', 'red'],
+      ['[-]', 'blocked (f to force)', 'yellow'],
+      ['[-]', 'protected', 'dim'],
+    ] as const;
+    const legend = [
+      paint('Selection', 'bold'),
+      ...markers.flatMap(([marker, label, color]) =>
+        wrapWords(`${marker} ${label}`, legendWidth).map((line, index) =>
+          index === 0 ? `${color === null ? marker : paint(marker, color)}${line.slice(marker.length)}` : line,
+        ),
+      ),
       '',
-      'FLAGS AND PATHS',
-      ...wrapLine(legend(), width()),
-      ...wrapLine('[ ] removable   [x] selected   [!] force selected   [-] blocked (f may override)', width()),
-      ...wrapLine('Selections survive filtering. d reviews all selected worktrees, including hidden ones.', width()),
+      paint('Flags', 'bold'),
     ];
+    for (let index = 0; index < FLAG_LEGEND_ENTRIES.length; index += 2) {
+      const entries = FLAG_LEGEND_ENTRIES.slice(index, index + 2).map(([glyph, color, label]) => `${paint(glyph, color)} ${label}`);
+      const pair = entries.join('  ');
+      legend.push(...(visibleWidth(pair) <= legendWidth ? [pair] : entries.flatMap((entry) =>
+        visibleWidth(entry) <= legendWidth ? [entry] : wrapWords(entry, legendWidth),
+      )));
+    }
+    legend.push(
+      '',
+      ...wrapWords('· default worktree path', legendWidth),
+      ...wrapWords('~/.wtree/<repo>/<branch>', legendWidth),
+      '',
+      ...wrapWords('f forces dirty, unpushed or locked; never main/current.', legendWidth).map((line) => paint(line, 'yellow')),
+    );
+    if (!sideBySide) return [...legend, '', ...keys];
+    return Array.from({ length: Math.max(keys.length, legend.length) }, (_, index) =>
+      `${padCell(keys[index] ?? '', keysWidth)}   ${legend[index] ?? ''}`,
+    );
+  };
+
+  const renderHelp = (): void => {
+    const content = helpLines();
+    const size = helpSize();
+    const rows = Math.min(size.rows, content.length + 3);
+    const capacity = rows - 3;
+    const { start, end } = pagedWindow({ rows: rows - 1, contentLength: content.length, scroll: helpScroll });
+    const columns = size.columns;
+    const top = Math.max(0, Math.floor((terminalSize().rows - rows) / 2));
+    const left = Math.floor((width() - columns) / 2);
+    const title = ' Help: shortcuts and legend ';
+    const borderTitle = clampAnsi(title, columns - 2);
+    const lines = [paint(`╭${borderTitle}${'─'.repeat(Math.max(0, columns - 2 - visibleWidth(borderTitle)))}╮`, 'dim')];
+    const body = content.slice(start, end);
+    while (body.length < capacity) body.push('');
+    for (const line of body) lines.push(`│ ${padCell(clampAnsi(line, columns - 4), columns - 4)} │`);
+    const range = `${start + 1}–${Math.min(end, content.length)}/${content.length}`;
+    const hints = `j/k scroll · g/G top/bottom · ?/Esc close · q quit · ${range}`;
+    const shortHints = `j/k scroll · Esc close · ${range}`;
+    const footer = visibleWidth(hints) <= columns - 4 ? hints
+      : visibleWidth(shortHints) <= columns - 4 ? shortHints : 'Esc close';
+    lines.push(`│ ${padCell(clampAnsi(footer, columns - 4), columns - 4)} │`, paint(`╰${'─'.repeat(columns - 2)}╯`, 'dim'));
+    const background = listLines().map((line) => paint(wrapLine(line, width())[0] ?? '', 'dim'));
+    output.write(`${ESC}2J${ESC}H${background.join('\n')}`);
+    lines.forEach((line, index) => output.write(`${ESC}${top + index + 1};${left + 1}H${line}`));
   };
 
   const showHelp = (): void => {
@@ -1168,8 +1256,9 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
     key,
     scroll,
     contentLength,
-  }: { str: string; key: Key; scroll: number; contentLength: number }): number | null => {
-    const { start, maxScroll } = pagedWindow({ rows: terminalSize().rows, contentLength, scroll });
+    rows = terminalSize().rows,
+  }: { str: string; key: Key; scroll: number; contentLength: number; rows?: number }): number | null => {
+    const { start, maxScroll } = pagedWindow({ rows, contentLength, scroll });
     if (key.name === 'down' || str === 'j') return Math.min(maxScroll, start + 1);
     if (key.name === 'up' || str === 'k') return Math.max(0, start - 1);
     if (str === 'g') return 0;
@@ -1188,7 +1277,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
         render();
         return;
       }
-      const nextScroll = scrollForKey({ str, key, scroll: helpScroll, contentLength: helpLines().length });
+      const nextScroll = scrollForKey({ str, key, scroll: helpScroll, contentLength: helpLines().length, rows: helpSize().rows - 1 });
       if (nextScroll === null) return;
       helpScroll = nextScroll;
       render();
