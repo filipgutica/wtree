@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/filipgutica/wtree/compare/v0.4.0...v0.5.0) (2026-09-27)
+
+
+### Features
+
+* add a floating help popup and semantic state colors ([#7](https://github.com/filipgutica/wtree/issues/7)) ([ac2ab2d](https://github.com/filipgutica/wtree/commit/ac2ab2d6c015ce9937f2fd5b61d18c87d5eb1f71))
+
 ## [0.4.0](https://github.com/filipgutica/wtree/compare/v0.3.0...v0.4.0) (2026-09-27)
 
 
