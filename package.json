@@ -1,6 +1,6 @@
 {
   "name": "wtree",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A better git worktree list: age, size, PR state, and bulk cleanup.",
   "type": "module",
   "bin": {
