@@ -236,7 +236,11 @@ Without a terminal it exits **2**, so it can never hang a script or an agent.
 | `?` | Toggle the help popup with shortcuts and the flags/path legend |
 | `q`, `Esc` | Quit |
 
-The help popup keeps the list visible behind it. Use `j`/`k` or arrows to scroll,
+The footer keeps essential shortcuts and a contextual flags/selection legend visible.
+Wider, taller terminals show more hints; smaller terminals prioritize the focused
+worktree and available actions. The help popup uses at most about three quarters
+of the terminal width and three fifths of its height, keeping the list visible
+behind it. Use `j`/`k` or arrows to scroll,
 `g`/`G` for the top/bottom, and `Esc`, `Enter` or `?` to close it. Cyan marks
 shortcuts; green marks selection, yellow marks forceable blocks, and red marks
 forced selection. Protected rows stay muted. All states keep their text labels
