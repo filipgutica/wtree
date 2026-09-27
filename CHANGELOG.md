@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/filipgutica/wtree/compare/v0.5.0...v0.6.0) (2026-09-27)
+
+
+### Features
+
+* make TUI help and footer responsive ([#9](https://github.com/filipgutica/wtree/issues/9)) ([0e5adf2](https://github.com/filipgutica/wtree/commit/0e5adf2fc2504130a9b6c6abdeffb589d49be655))
+
 ## [0.5.0](https://github.com/filipgutica/wtree/compare/v0.4.0...v0.5.0) (2026-09-27)
 
 
