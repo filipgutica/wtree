@@ -227,13 +227,19 @@ Without a terminal it exits **2**, so it can never hang a script or an agent.
 | `a` / `F` | Select all removable / all force-removable |
 | `c` | Clear the whole selection |
 | `/` | Filter by branch or path. `s` sorts, `p` cycles PR state |
-| `Enter` | Detail pane. There, `w` opens the PR, `y` copies the path |
+| `Enter` | Scrollable details with the complete branch and path |
+| `w` / `y` | Open the focused worktree PR / copy its path, in the list or details |
 | `o` | Open: exit and print the worktree's path |
 | `n` | New worktree for a branch |
-| `d` | Delete the selection, with a confirmation screen first |
+| `d` | Review removal of the whole selection, or the focused worktree, then confirm |
 | `b` | Toggle branch deletion. `r` refresh, `S` measure sizes |
-| `?` | All keys |
+| `?` | All keys and the flags/path legend |
 | `q`, `Esc` | Quit |
+
+The header shows the visible row range. Long branches and paths keep both ends;
+`Enter` shows their complete values. `[-]` marks a blocked worktree, and the
+focused status explains why. Selections survive filtering: the header counts
+selected worktrees hidden by the filter, and removal includes those selections.
 
 `f` cannot override the main worktree or the one you are standing in. The
 confirmation screen marks every forced row `FORCE … [FORCED: reason]` and warns
