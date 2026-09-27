@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Block } from '../src/clean.js';
 import {
+  compactBranchLabel,
+  compactPath,
   displayPath,
   formatAge,
   formatSize,
@@ -163,5 +165,30 @@ describe('displayPath', () => {
       compactPaths: true,
     });
     assert.match(out, /·$/);
+  });
+});
+
+describe('compact worktree identity', () => {
+  it('keeps distinguishing branch and path suffixes within their column widths', () => {
+    const branch = 'workbench/ma-5503-use-tabledata-first';
+    const wt = makeWorktree({ branch, path: '/tmp/shared/worktrees/' + branch });
+    const other = makeWorktree({ branch: branch.replace('first', 'second') });
+    const label = compactBranchLabel(wt, 26);
+    assert.equal(label.length, 26);
+    assert.ok(label.startsWith('workbench/ma-'));
+    assert.ok(label.endsWith('-first'));
+    assert.notEqual(label, compactBranchLabel(other, 26));
+    const path = compactPath({ wt, cwd: '/unrelated', mainPath: null, width: 24 });
+    assert.equal(path.length, 24);
+    assert.ok(path.startsWith('/tmp/shared'));
+    assert.ok(path.endsWith('-first'));
+  });
+
+  it('leaves short identities intact and handles very narrow columns', () => {
+    const wt = makeWorktree({ branch: 'feat/x', path: '/tmp/x' });
+    assert.equal(compactBranchLabel(wt, 20), 'feat/x');
+    assert.equal(compactBranchLabel(wt, 1), '…');
+    assert.equal(compactBranchLabel(wt, 0), '');
+    assert.equal(compactPath({ wt, cwd: '/unrelated', mainPath: null, width: 20 }), '/tmp/x');
   });
 });

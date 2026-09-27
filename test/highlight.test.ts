@@ -17,16 +17,12 @@ describe('highlightRow', () => {
     assert.ok(out.endsWith(RESET));
   });
 
-  // Each coloured span in a row ends with a full reset, which also clears the
-  // reverse attribute. Without re-opening it the highlight stops at the first
-  // coloured cell instead of covering the row.
-  it('re-opens reverse after every inner reset', () => {
-    const row = `${paint('a', 'red', true)} ${paint('b', 'blue', true)} c`;
-    const out = highlightRow(row, 20, true);
-    const resets = out.split(RESET).length - 1;
-    const reverses = out.split(REVERSE).length - 1;
-    assert.equal(reverses, resets, 'every reset must be followed by a reverse');
-    assert.ok(out.endsWith(RESET), 'the row must not leave reverse set');
+  it('uses one uniform highlight while preserving markers and text', () => {
+    const row = `${paint('[x]', 'red', true)} ${paint('M@', 'blue', true)} /repo/main`;
+    assert.equal(
+      highlightRow(row, 24, true),
+      `${REVERSE}[x] M@ /repo/main       ${RESET}`,
+    );
   });
 
   it('does not pad a row already at or over the width', () => {

@@ -76,19 +76,12 @@ export const clampAnsi = (text: string, width: number): string => {
   return `${out}\u2026${sawEscape ? CODES.reset : ''}`;
 };
 
-/**
- * Invert a whole row to mark the cursor.
- *
- * The row already carries colour, and each of those spans ends with a full
- * reset, which would drop the reverse attribute part way along the line. So
- * every inner reset re-opens reverse, and the row is padded to the full width
- * first so the highlight reaches the right edge rather than stopping at the text.
- */
+/** Mark the cursor with one uniform, full-width inverse row. */
 export const highlightRow = (text: string, width: number, enabled = useColor()): string => {
   if (!enabled) return text;
-  const padded = text + ' '.repeat(Math.max(0, width - visibleWidth(text)));
-  const kept = padded.split(CODES.reset).join(`${CODES.reset}${CODES.reverse}`);
-  return `${CODES.reverse}${kept}${CODES.reset}`;
+  const plain = text.replace(ANSI_RE, '');
+  const padded = plain + ' '.repeat(Math.max(0, width - plain.length));
+  return `${CODES.reverse}${padded}${CODES.reset}`;
 };
 
 const pad = (text: string, width: number): string =>
@@ -165,6 +158,25 @@ export const branchLabel = (wt: Worktree, max = BRANCH_MAX): string => {
   return paint(`(detached ${wt.head?.slice(0, 7) ?? '?'})`, 'dim');
 };
 
+/** Keep both ends of an identity visible instead of losing its distinguishing suffix. */
+const shortenMiddle = (text: string, width: number): string => {
+  if (width <= 0) return '';
+  if (text.length <= width) return text;
+  if (width === 1) return '…';
+  const prefix = Math.ceil((width - 1) / 2);
+  const suffix = width - 1 - prefix;
+  return `${text.slice(0, prefix)}…${suffix > 0 ? text.slice(-suffix) : ''}`;
+};
+
+export const compactBranchLabel = (wt: Worktree, width: number): string => {
+  const name = shortenMiddle(
+    wt.bare ? '(bare)' : wt.branch ?? `(detached ${wt.head?.slice(0, 7) ?? '?'})`,
+    width,
+  );
+  if (wt.bare || wt.branch === null) return paint(name, 'dim');
+  return wt.isMain ? paint(name, 'bold') : name;
+};
+
 export const shortPath = (path: string, cwd: string): string => {
   const rel = relative(cwd, path);
   if (rel && !rel.startsWith('..') && rel.length < path.length) return rel;
@@ -196,6 +208,23 @@ export const displayPath = ({
     return paint('·', 'dim');
   }
   return shortPath(wt.path, cwd);
+};
+
+export const compactPath = ({
+  wt,
+  cwd,
+  mainPath,
+  width,
+}: {
+  wt: Worktree;
+  cwd: string;
+  mainPath: string | null;
+  width: number;
+}): string => {
+  const path = displayPath({ wt, cwd, mainPath });
+  if (visibleWidth(path) <= width) return path;
+  const shortened = shortenMiddle(path.replace(ANSI_RE, ''), width);
+  return wt.missing ? paint(shortened, 'red') : shortened;
 };
 
 export interface ListRenderOptions {

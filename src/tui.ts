@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { closeSync, existsSync, openSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import { emitKeypressEvents } from 'node:readline';
 import type { Key } from 'node:readline';
 import { ReadStream, WriteStream } from 'node:tty';
@@ -16,14 +16,13 @@ import type { Collection } from './enrich.js';
 import type { RepoContext } from './git.js';
 import { ageDays, prStateOf, sortWorktrees, type SortKey } from './filter.js';
 import {
-  branchLabel,
+  compactBranchLabel,
+  compactPath,
   flags,
   formatAge,
   formatPr,
   formatSize,
-  BRANCH_MAX,
   clampAnsi,
-  displayPath,
   highlightRow,
   legend,
   paint,
@@ -72,8 +71,8 @@ export const HELP_ENTRIES: readonly (readonly [key: string, description: string]
   ['o', 'open the worktree: exit and print its path'],
   ['n', 'create a worktree for a new or existing branch'],
   ['d', 'delete the selection, or the worktree under the cursor'],
-  ['w', 'detail screen: open the PR in the browser'],
-  ['y', 'detail screen: copy the worktree path'],
+  ['w', 'open the focused worktree PR in the browser'],
+  ['y', 'copy the focused worktree path'],
   ['y / b / Esc', 'confirm screen: remove / toggle branch deletion / cancel'],
   ['?', 'show this help'],
   ['q / Esc', 'quit (Esc goes back on other screens)'],
@@ -117,6 +116,15 @@ const errorMessage = (error: unknown): string =>
 
 const oneLine = (value: string): string => value.replace(/[\r\n]+/g, ' ');
 
+/** Paged content wraps instead of discarding the ends of paths, branches or legends. */
+const wrapLine = (line: string, columns: number): string[] => {
+  const plain = line.replace(/\u001b\[[0-9;]*m/g, '');
+  if (plain.length === 0) return [''];
+  const rows: string[] = [];
+  for (let start = 0; start < plain.length; start += columns) rows.push(plain.slice(start, start + columns));
+  return rows;
+};
+
 const padCell = (cell: string, width: number): string =>
   cell + ' '.repeat(Math.max(0, width - visibleWidth(cell)));
 
@@ -126,15 +134,14 @@ const isEscape = (key: Key): boolean => key.name === 'escape' || key.sequence ==
 
 const isUpper = (key: Key, value: string): boolean => key.name === value && key.shift === true;
 
-const renderCells = (headers: string[], rows: string[][]): string[] => {
-  const widths = headers.map((header, index) =>
-    Math.max(visibleWidth(header), ...rows.map((row) => visibleWidth(row[index] ?? ''))),
-  );
+const renderCells = ({ headers, rows, widths }: { headers: string[]; rows: string[][]; widths: number[] }): string[] => {
   const line = (cells: string[]): string =>
     cells
-      .map((cell, index) =>
-        index === cells.length - 1 ? cell : padCell(cell, widths[index] ?? visibleWidth(cell)),
-      )
+      .map((cell, index) => {
+        const cellWidth = widths[index] ?? visibleWidth(cell);
+        const fitted = clampAnsi(cell, cellWidth);
+        return index === cells.length - 1 ? fitted : padCell(fitted, cellWidth);
+      })
       .join('  ')
       .trimEnd();
   return [line(headers.map((header) => paint(header, 'dim'))), ...rows.map(line)];
@@ -284,6 +291,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
     const visible = getVisibleWorktrees();
     if (visible.length === 0) return;
     cursor = Math.max(0, Math.min(visible.length - 1, cursor + delta));
+    status = null;
   };
 
   const selectAllRemovable = (): void => {
@@ -397,7 +405,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
     return [
       paint('DETAIL', 'bold'),
       `path: ${wt.path}`,
-      `branch: ${branchLabel(wt)}`,
+      `branch: ${wt.branch ?? (wt.bare ? '(bare)' : `(detached ${wt.head ?? '—'})`)}`,
       `head: ${wt.head ?? '—'}`,
       `last commit: ${wt.lastCommitAt ?? '—'}`,
       `checkout: ${wt.checkoutAt ?? '—'}`,
@@ -410,32 +418,43 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
       ...prLines,
       '',
       paint('o open   w PR in browser   y copy path   Enter or Esc return', 'dim'),
-    ];
+    ].flatMap((line) => wrapLine(line, width()));
   };
 
-  const listRows = (visible: Worktree[]): string[][] =>
-    visible.map((wt, index) => {
-      const marker = index === cursor ? paint('>', 'cyan') : ' ';
-      const checkbox = forced.has(wt.path)
-        ? paint('[!]', 'red')
-        : selected.has(wt.path)
-          ? paint('[x]', 'green')
-          : '[ ]';
-      return [
-        marker,
-        checkbox,
-        branchLabel(wt, branchWidth()),
-        formatAge(ageDays(wt, options.ageBasis)),
-        formatPr(wt),
-        ...(showSize ? [formatSize(wt.sizeKb)] : []),
-        flags(wt),
-        displayPath({
-          wt,
-          cwd: options.cwd,
-          mainPath: collection.worktrees.find((w) => w.isMain)?.path ?? null,
-        }),
-      ];
-    });
+  const listCells = (visible: Worktree[]): { headers: string[]; rows: string[][]; widths: number[] } => {
+    // On small terminals give branch and path priority over optional metadata.
+    const showMetadata = width() >= 70;
+    const showFlags = width() >= 45;
+    const headers = ['', '', 'BRANCH', ...(showMetadata ? ['AGE', 'PR', ...(showSize ? ['SIZE'] : [])] : []), ...(showFlags ? ['FLAGS'] : []), 'PATH'];
+    const rows = visible.map((wt, index) => [
+      index === cursor ? paint('>', 'cyan') : ' ',
+      forced.has(wt.path) ? paint('[!]', 'red')
+        : selected.has(wt.path) ? paint('[x]', 'green')
+          : isRemovable(wt) ? '[ ]' : paint('[-]', 'dim'),
+      '',
+      ...(showMetadata ? [formatAge(ageDays(wt, options.ageBasis)), formatPr(wt), ...(showSize ? [formatSize(wt.sizeKb)] : [])] : []),
+      ...(showFlags ? [flags(wt)] : []),
+      '',
+    ]);
+    const widths = headers.map((header, index) =>
+      Math.max(visibleWidth(header), ...rows.map((row) => visibleWidth(row[index] ?? ''))),
+    );
+    const pathIndex = headers.length - 1;
+    const fixedWidth = widths.reduce((total, value, index) => total + (index === 2 || index === pathIndex ? 0 : value), 0);
+    const identityWidth = Math.max(2, width() - fixedWidth - (headers.length - 1) * 2);
+    const branchWidth = Math.max(1, Math.min(42, Math.floor(identityWidth / 2)));
+    const pathWidth = Math.max(1, identityWidth - branchWidth);
+    widths[2] = branchWidth;
+    widths[pathIndex] = pathWidth;
+    const mainPath = collection.worktrees.find((wt) => wt.isMain)?.path ?? null;
+    for (const [index, wt] of visible.entries()) {
+      const cells = rows[index];
+      if (!cells) continue;
+      cells[2] = compactBranchLabel(wt, branchWidth);
+      cells[pathIndex] = compactPath({ wt, cwd: options.cwd, mainPath, width: pathWidth });
+    }
+    return { headers, rows, widths };
+  };
 
   // getWindowSize() returns cached properties. Refresh them on SIGWINCH using
   // a new stream; Node only refreshes process.stdout's stream automatically.
@@ -447,12 +466,6 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
   /** Nothing may wrap: a wrapped line costs a row the layout did not budget for. */
   const clampLines = (lines: string[]): string[] => lines.map((l) => clampAnsi(l, width()));
 
-  /**
-   * Give BRANCH at most a third of the terminal, so PATH stays readable in a
-   * narrow window instead of being clamped away entirely.
-   */
-  const branchWidth = (): number => Math.max(12, Math.min(BRANCH_MAX, Math.floor(width() / 3)));
-
   /** Prefer the full text, fall back to a shorter one rather than truncating key hints away. */
   const fit = (full: string, short: string): string =>
     visibleWidth(full) <= width() ? full : short;
@@ -460,7 +473,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
   const renderList = (): void => {
     const visible = getVisibleWorktrees();
     const height = Math.max(1, terminalSize().rows);
-    // header, filters, legend, table header, footer, status.
+    // repo, filters, removal scope, table header, footer, status.
     const rowCapacity = Math.max(0, height - 6);
     if (visible.length === 0) cursor = 0;
     else cursor = Math.min(cursor, visible.length - 1);
@@ -471,23 +484,36 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
       scrollTop = cursor - rowCapacity + 1;
     }
 
-    const headers = ['', '', 'BRANCH', 'AGE', 'PR', ...(showSize ? ['SIZE'] : []), 'FLAGS', 'PATH'];
-    const rows = listRows(visible);
-    const tableLines = renderCells(headers, rows);
+    const { headers, rows, widths } = listCells(visible);
+    const tableLines = renderCells({ headers, rows, widths });
     const firstRow = Math.max(0, scrollTop) + 1;
     const shownRows = tableLines.slice(firstRow, firstRow + rowCapacity);
     const removable = collection.worktrees.filter(isRemovable).length;
-    const forcedNote = forced.size > 0 ? `, ${forced.size} forced` : '';
-    const header = `wtree — ${options.repo.root} — ${visible.length}/${collection.worktrees.length} shown, ${removable} removable, ${selected.size} selected${forcedNote}`;
-    const filterLine = `sort: ${sortKey}  PR: ${prFilter}  filter: ${
-      filterMode ? `/${filterDraft}_` : pathFilter || 'none'
-    }  age: ${options.ageBasis}  delete branches: ${deleteBranch ? 'on' : 'off'}`;
+    const count = visible.length === collection.worktrees.length
+      ? `${visible.length} worktrees` : `${visible.length} of ${collection.worktrees.length} match`;
+    const header = `wtree — ${basename(options.repo.root)} · ${count} · ${removable} removable overall`;
+    const visiblePaths = new Set(visible.map((wt) => wt.path));
+    const hidden = [...selected].filter((path) => !visiblePaths.has(path)).length;
+    const selectionLine = `delete branches: ${deleteBranch ? 'ON' : 'off'} · ${selected.size} selected${hidden ? ` · ${hidden} hidden by filter` : ''}${forced.size ? ` · ${forced.size} forced` : ''}`;
+    const range = visible.length > 0 && shownRows.length > 0
+      ? `Rows ${firstRow}–${firstRow + shownRows.length - 1} of ${visible.length}` : `Rows 0 of ${visible.length}`;
+    const filterLine = `${range} · s sort: ${sortKey} · p PR: ${prFilter} · filter: ${filterMode ? `/${filterDraft}_` : pathFilter || 'none'} · age: ${options.ageBasis}`;
+    const removalScope = selected.size > 0 ? String(selected.size) : 'focused';
     const footer = fit(
-      'Space select · d delete · / filter · Enter details · o open · n new · ? help · q quit',
-      'Space sel · d del · / filter · o open · n new · ? help · q quit',
+      `o open · Enter details · / filter · n new · Space select · d review removal (${removalScope}) · ? help · q quit`,
+      `o open · Enter details · / filter · n new · d review (${removalScope}) · ? help`,
     );
-    const footerStatus = createMode ? `new worktree for branch: ${createDraft}_` : status ?? '';
-    const headerLines = [header, filterLine, legend(), tableLines[0] ?? ''];
+    const focused = visible[cursor];
+    const blocks = focused ? planFor(focused).blocks : [];
+    const blocked = blocks.length > 0 ? `blocked: ${blocks.map((block) => block.message).join('; ')} · ` : '';
+    const identityWidth = Math.max(2, width() - visibleWidth(blocked) - 3);
+    const focusedBranchWidth = Math.max(1, Math.min(42, Math.floor(identityWidth / 2)));
+    const focusStatus = focused
+      ? `${blocked}${compactBranchLabel(focused, focusedBranchWidth)} — ${compactPath({ wt: focused, cwd: '', mainPath: null, width: Math.max(1, identityWidth - focusedBranchWidth) })}`
+      : `No matches${pathFilter || filterDraft ? ` for ${filterMode ? filterDraft : pathFilter}` : ` for PR: ${prFilter}`}`;
+    const footerStatus = createMode ? `new worktree for branch: ${createDraft}_` : status ?? focusStatus;
+    const headerLines = [header, filterLine, selectionLine, tableLines[0] ?? ''];
+    if (visible.length === 0 && rowCapacity > 0) shownRows.push(focusStatus);
     const lines = [...headerLines, ...shownRows];
     while (lines.length < Math.max(0, height - 2)) lines.push('');
     lines.push(footer, footerStatus);
@@ -529,22 +555,13 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
         break;
       }
       case 'help':
-        renderPaged('wtree — keys', helpLines(), helpScroll, [
+        renderPaged('wtree — keys and legend', helpLines(), helpScroll, [
           'j/k scroll   Esc, Enter or ? back to the list   q quit',
           'j/k scroll  Esc back  q quit',
         ]);
         break;
       case 'confirm': {
-        const content = [
-          paint(
-            `DELETE WORKTREES — also delete branches: ${deleteBranch ? 'YES' : 'NO'}${
-              forced.size > 0 ? `  —  ${forced.size} FORCED, uncommitted work will be lost` : ''
-            }`,
-            'bold',
-          ),
-          '',
-          ...renderPlanLines(pendingPlans),
-        ];
+        const content = confirmationLines();
         const count = pendingPlans.filter((plan) => plan.blocks.length === 0).length;
         const noun = `${count} worktree${count === 1 ? '' : 's'}`;
         const branches = deleteBranch ? ' and their branches' : '';
@@ -561,7 +578,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
         ]);
         break;
       case 'results':
-        renderPaged('wtree — deletion results', resultLines, resultScroll, [
+        renderPaged('wtree — deletion results', resultLines.flatMap((line) => wrapLine(line, width())), resultScroll, [
           'j/k scroll   Enter or Esc returns to the list   q quit',
           'j/k scroll  Enter back  q quit',
         ]);
@@ -601,8 +618,19 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
           .join('; ')}`,
       );
     }
-    return lines;
+    return lines.flatMap((line) => wrapLine(line, width()));
   };
+
+  const confirmationLines = (): string[] => [
+    ...wrapLine(paint(
+      `DELETE WORKTREES — also delete branches: ${deleteBranch ? 'YES' : 'NO'}${
+        forced.size > 0 ? `  —  ${forced.size} FORCED, uncommitted work will be lost` : ''
+      }`,
+      'bold',
+    ), width()),
+    '',
+    ...renderPlanLines(pendingPlans),
+  ];
 
   const removalResultLines = (
     plans: Plan[],
@@ -762,7 +790,14 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
 
   const helpLines = (): string[] => {
     const keyWidth = Math.max(...HELP_ENTRIES.map(([key]) => key.length));
-    return HELP_ENTRIES.map(([key, description]) => `${paint(key.padEnd(keyWidth), 'bold')}  ${description}`);
+    return [
+      ...HELP_ENTRIES.flatMap(([key, description]) => wrapLine(`${key.padEnd(keyWidth)}  ${description}`, width())),
+      '',
+      'FLAGS AND PATHS',
+      ...wrapLine(legend(), width()),
+      ...wrapLine('[ ] removable   [x] selected   [!] force selected   [-] blocked (f may override)', width()),
+      ...wrapLine('Selections survive filtering. d reviews all selected worktrees, including hidden ones.', width()),
+    ];
   };
 
   const showHelp = (): void => {
@@ -944,12 +979,14 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
     if (str === 'g' && !key.shift) {
       cursor = 0;
       scrollTop = 0;
+      status = null;
       render();
       return;
     }
     if (isUpper(key, 'g') || str === 'G') {
       const visible = getVisibleWorktrees();
       cursor = Math.max(0, visible.length - 1);
+      status = null;
       render();
       return;
     }
@@ -1054,6 +1091,21 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
       openCurrent();
       return;
     }
+    if (str === 'y') {
+      copyCurrentPath();
+      render();
+      return;
+    }
+    if (str === 'w') {
+      busy = true;
+      try {
+        await openCurrentPr();
+      } finally {
+        busy = false;
+        render();
+      }
+      return;
+    }
     if (str === 'n') {
       createMode = true;
       createDraft = '';
@@ -1143,7 +1195,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
       return;
     }
     if (screen === 'results') {
-      const nextScroll = scrollForKey({ str, key, scroll: resultScroll, contentLength: resultLines.length });
+      const nextScroll = scrollForKey({ str, key, scroll: resultScroll, contentLength: resultLines.flatMap((line) => wrapLine(line, width())).length });
       if (nextScroll !== null) {
         resultScroll = nextScroll;
         render();
@@ -1157,7 +1209,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
       return;
     }
     if (screen === 'confirm') {
-      const contentLength = renderPlanLines(pendingPlans).length + 2;
+      const contentLength = confirmationLines().length;
       const nextScroll = scrollForKey({ str, key, scroll: confirmScroll, contentLength });
       if (nextScroll !== null) confirmScroll = nextScroll;
       else if (str === 'b') {
