@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/filipgutica/wtree/compare/v0.3.0...v0.4.0) (2026-09-27)
+
+
+### Features
+
+* improve worktree browser readability and navigation ([#5](https://github.com/filipgutica/wtree/issues/5)) ([12aab4c](https://github.com/filipgutica/wtree/commit/12aab4c060b330fe778018c23b6f8d43297cc17b))
+
 ## [0.3.0](https://github.com/filipgutica/wtree/compare/v0.2.0...v0.3.0) (2026-09-26)
 
 
