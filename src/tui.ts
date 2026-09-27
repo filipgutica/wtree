@@ -32,6 +32,7 @@ import {
   visibleWidth,
 } from './render.js';
 import { run } from './exec.js';
+import { listFooter, popupSize, selectionScopeLines } from './tui-layout.js';
 import type { AgeBasis, Worktree } from './types.js';
 
 export interface TuiOptions {
@@ -54,28 +55,28 @@ export interface TuiResult {
 
 /** Every key, for the `?` screen. The footer only shows the essentials. */
 export const HELP_ENTRIES: readonly (readonly [key: string, description: string])[] = [
-  ['j / k, arrows', 'move the cursor (scroll on paged screens)'],
-  ['g / G', 'jump to the top / bottom'],
-  ['Space', 'select or unselect the worktree under the cursor'],
-  ['f', 'force-select a dirty, unpushed or locked worktree'],
-  ['a', 'select every removable worktree'],
-  ['F', 'select every removable worktree, forcing where needed'],
-  ['c / A', 'clear the selection'],
-  ['/', 'filter by branch or path (Enter applies, Esc cancels)'],
-  ['s', 'cycle the sort key'],
-  ['p', 'cycle the PR filter'],
-  ['b', 'toggle deleting branches along with worktrees'],
-  ['r', 'refresh worktrees and PR state'],
-  ['S', 'show or hide the size column'],
-  ['Enter', 'show details for the worktree under the cursor'],
-  ['o', 'open the worktree: exit and print its path'],
-  ['n', 'create a worktree for a new or existing branch'],
-  ['d', 'delete the selection, or the worktree under the cursor'],
-  ['w', 'open the focused worktree PR in the browser'],
-  ['y', 'copy the focused worktree path'],
-  ['y / b / Esc', 'confirm screen: remove / toggle branch deletion / cancel'],
-  ['?', 'show this help'],
-  ['q / Esc', 'quit (Esc goes back on other screens)'],
+  ['j / k, arrows', 'move / scroll'],
+  ['g / G', 'jump to top / bottom'],
+  ['Space', 'toggle focused selection'],
+  ['f', 'force dirty / unpushed / locked'],
+  ['a', 'select all removable'],
+  ['F', 'select all, forcing as needed'],
+  ['c / A', 'clear selection'],
+  ['/', 'filter branch/path; Enter applies, Esc cancels'],
+  ['s', 'cycle sort'],
+  ['p', 'cycle PR filter'],
+  ['b', 'toggle branch deletion'],
+  ['r', 'refresh worktrees / PRs'],
+  ['S', 'toggle size column'],
+  ['Enter', 'focused details'],
+  ['o', 'open; exit with path'],
+  ['n', 'create worktree'],
+  ['d', 'review selected / focused removal'],
+  ['w', 'open focused PR'],
+  ['y', 'copy focused path'],
+  ['y / b / Esc', 'confirm: remove / branches / cancel'],
+  ['?', 'toggle help'],
+  ['q / Esc', 'quit / back from other screens'],
   ['Ctrl-C', 'quit from any screen'],
 ];
 
@@ -487,10 +488,21 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
   const listLines = (): string[] => {
     const visible = getVisibleWorktrees();
     const height = Math.max(1, terminalSize().rows);
-    // repo, filters, removal scope, table header, footer, status.
-    const rowCapacity = Math.max(0, height - 6);
+    const visiblePaths = new Set(visible.map((wt) => wt.path));
+    const hidden = [...selected].filter((path) => !visiblePaths.has(path)).length;
+    const selectionLines = selectionScopeLines({ columns: width(), selected: selected.size, hidden,
+      forced: forced.size, deleteBranch });
     if (visible.length === 0) cursor = 0;
     else cursor = Math.min(cursor, visible.length - 1);
+    const focused = visible[cursor];
+    const forceable = focused !== undefined && !isRemovable(focused) && isForceRemovable(focused);
+    const marker = focused && forced.has(focused.path) ? '[!]' : focused && selected.has(focused.path)
+      ? '[x]' : focused && isRemovable(focused) ? '[ ]' : '[-]';
+    const footer = listFooter({ columns: width(), rows: height, worktrees: visible, focused, marker,
+      forceable, reviewCount: selected.size || (focused && isRemovable(focused) ? 1 : 0) });
+    // Repo, filters, scope, table header, shortcuts, legend and status.
+    const footerRows = footer.legend.length + 2;
+    const rowCapacity = Math.max(0, height - 3 - selectionLines.length - footerRows);
     const maxScroll = Math.max(0, visible.length - rowCapacity);
     scrollTop = Math.min(scrollTop, maxScroll);
     if (cursor < scrollTop) scrollTop = cursor;
@@ -506,18 +518,9 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
     const count = visible.length === collection.worktrees.length
       ? `${visible.length} worktrees` : `${visible.length} of ${collection.worktrees.length} match`;
     const header = `wtree — ${basename(options.repo.root)} · ${count} · ${removable} removable overall`;
-    const visiblePaths = new Set(visible.map((wt) => wt.path));
-    const hidden = [...selected].filter((path) => !visiblePaths.has(path)).length;
-    const selectionLine = `delete branches: ${deleteBranch ? 'ON' : 'off'} · ${selected.size} selected${hidden ? ` · ${hidden} hidden by filter` : ''}${forced.size ? ` · ${forced.size} forced` : ''}`;
     const range = visible.length > 0 && shownRows.length > 0
       ? `Rows ${firstRow}–${firstRow + shownRows.length - 1} of ${visible.length}` : `Rows 0 of ${visible.length}`;
     const filterLine = `${range} · s sort: ${sortKey} · p PR: ${prFilter} · filter: ${filterMode ? `/${filterDraft}_` : pathFilter || 'none'} · age: ${options.ageBasis}`;
-    const removalScope = selected.size > 0 ? String(selected.size) : 'focused';
-    const footer = fit(
-      `o open · Enter details · / filter · n new · Space select · d review removal (${removalScope}) · ? keys/flags · q quit`,
-      `o open · Enter details · / filter · n new · d review (${removalScope}) · ? keys/flags`,
-    );
-    const focused = visible[cursor];
     const blocks = focused ? planFor(focused).blocks : [];
     const blocked = blocks.length > 0 ? `blocked: ${blocks.map((block) => block.message).join('; ')} · ` : '';
     const identityWidth = Math.max(2, width() - visibleWidth(blocked) - 3);
@@ -526,11 +529,11 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
       ? `${blocked}${compactBranchLabel(focused, focusedBranchWidth)} — ${compactPath({ wt: focused, cwd: '', mainPath: null, width: Math.max(1, identityWidth - focusedBranchWidth) })}`
       : `No matches${pathFilter || filterDraft ? ` for ${filterMode ? filterDraft : pathFilter}` : ` for PR: ${prFilter}`}`;
     const footerStatus = createMode ? `new worktree for branch: ${createDraft}_` : status ?? focusStatus;
-    const headerLines = [header, filterLine, selectionLine, tableLines[0] ?? ''];
+    const headerLines = [header, filterLine, ...selectionLines, tableLines[0] ?? ''];
     if (visible.length === 0 && rowCapacity > 0) shownRows.push(focusStatus);
     const lines = [...headerLines, ...shownRows];
-    while (lines.length < Math.max(0, height - 2)) lines.push('');
-    lines.push(footer, footerStatus);
+    while (lines.length < Math.max(0, height - footerRows)) lines.push('');
+    lines.push(footer.shortcuts, ...footer.legend, footerStatus);
 
     const clamped = clampLines(lines);
     // Highlight the cursor row only when it is actually on screen.
@@ -803,14 +806,12 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
     }
   };
 
-  const helpSize = (): { columns: number; rows: number } => ({
-    columns: Math.min(110, width() - 4),
-    rows: Math.max(4, terminalSize().rows - 4),
-  });
+  const helpSize = (): { columns: number; rows: number } =>
+    popupSize({ columns: width(), rows: terminalSize().rows });
 
   const helpLines = (): string[] => {
     const columns = helpSize().columns - 4;
-    const sideBySide = columns >= 64;
+    const sideBySide = columns >= 52;
     const legendWidth = sideBySide ? Math.min(32, Math.floor(columns * 0.4)) : columns;
     const keysWidth = sideBySide ? columns - legendWidth - 3 : columns;
     const keyWidth = Math.min(14, Math.max(1, keysWidth - 4));
@@ -856,7 +857,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
       '',
       ...wrapWords('f forces dirty, unpushed or locked; never main/current.', legendWidth).map((line) => paint(line, 'yellow')),
     );
-    if (!sideBySide) return [...legend, '', ...keys];
+    if (!sideBySide) return [...keys, '', ...legend];
     return Array.from({ length: Math.max(keys.length, legend.length) }, (_, index) =>
       `${padCell(keys[index] ?? '', keysWidth)}   ${legend[index] ?? ''}`,
     );
