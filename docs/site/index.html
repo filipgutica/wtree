@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      wtree · See your Git worktrees, their pull requests, and what is ready to
+      clean up.
+    </title>
+    <meta
+      name="description"
+      content="See your Git worktrees, their pull requests, and what is ready to clean up."
+    />
+    <meta property="og:title" content="wtree" />
+    <meta
+      property="og:description"
+      content="See your Git worktrees, their pull requests, and what is ready to clean up."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://filipgutica.github.io/wtree/" />
+    <link rel="canonical" href="https://filipgutica.github.io/wtree/" />
+    <link rel="stylesheet" href="./tokens.css" />
+    <link rel="stylesheet" href="./style.css" />
+    <script src="./site.js" defer></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <div class="page">
+      <header class="site-header">
+        <nav class="tool-nav" aria-label="Tools">
+          <a href="https://filipgutica.github.io/annoterm/">annoterm</a
+          ><a href="https://filipgutica.github.io/wtree/" aria-current="page"
+            >wtree</a
+          ><a href="https://filipgutica.github.io/devps/">devps</a>
+        </nav>
+        <div class="segmented" role="group" aria-label="Color theme" hidden>
+          <button type="button" data-theme-choice="system" aria-pressed="true">
+            System
+          </button>
+          <button type="button" data-theme-choice="light" aria-pressed="false">
+            Light
+          </button>
+          <button type="button" data-theme-choice="dark" aria-pressed="false">
+            Dark
+          </button>
+        </div>
+      </header>
+      <main id="main">
+        <div class="opening">
+          <section class="intro" aria-labelledby="title">
+            <h1 id="title">wtree</h1>
+            <p class="tagline">See your worktrees. Finish the loose ends.</p>
+            <p class="lede">
+              Branches, pull requests, and cleanup in one terminal tool.
+            </p>
+            <div class="actions">
+              <a class="btn primary" href="#install">Install with Homebrew</a
+              ><a class="btn" href="https://github.com/filipgutica/wtree"
+                >View source</a
+              >
+            </div>
+            <p class="meta">macOS and Linux · Node.js 20+ · Git required</p>
+          </section>
+          <figure class="preview">
+            <a
+              href="./preview.png"
+              aria-label="Open full wtree terminal preview"
+              ><img
+                src="./preview.png"
+                width="750"
+                height="400"
+                alt="The wtree interactive browser listing four worktrees in a demo repository."
+                fetchpriority="high"
+            /></a>
+            <figcaption>
+              Actual tool capture with demo data. Select to view full size.
+            </figcaption>
+          </figure>
+        </div>
+        <section id="install" aria-labelledby="install-title">
+          <h2 id="install-title">Install</h2>
+          <div class="example">
+            <div class="code">
+              <div class="code-head">
+                <span>Homebrew</span
+                ><button
+                  class="btn ghost"
+                  type="button"
+                  data-copy
+                  hidden
+                  aria-label="Copy homebrew command"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre
+                tabindex="0"
+                aria-label="Homebrew command"
+              ><code>brew install filipgutica/tap/wtree</code></pre>
+            </div>
+            <p class="copy-status" role="status"></p>
+            <p class="note">
+              Homebrew installs Node.js. GitHub CLI (gh) is optional for pull
+              request state; fzf is optional for the picker.
+            </p>
+          </div>
+          <p class="note">
+            Install <a href="https://brew.sh/">Homebrew</a> first if the brew
+            command is unavailable. See the
+            <a href="https://github.com/filipgutica/wtree#quick-start"
+              >README</a
+            >
+            for installation details.
+          </p>
+        </section>
+        <section aria-labelledby="workflow-title">
+          <h2 id="workflow-title">Keep your worktrees in view</h2>
+          <div class="examples">
+            <div class="example">
+              <div class="example-copy">
+                <h3>List with disk usage</h3>
+                <p class="note">
+                  See every worktree in the current repository, oldest first.
+                  Size measurement is opt-in.
+                </p>
+              </div>
+              <div class="code">
+                <div class="code-head">
+                  <span>Command</span
+                  ><button
+                    class="btn ghost"
+                    type="button"
+                    data-copy
+                    hidden
+                    aria-label="Copy list with disk usage command"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <pre
+                  tabindex="0"
+                  aria-label="List with disk usage command"
+                ><code>wtree --size</code></pre>
+              </div>
+              <p class="copy-status" role="status"></p>
+            </div>
+            <div class="example">
+              <div class="example-copy">
+                <h3>Browse interactively</h3>
+                <p class="note">
+                  Filter, select, and inspect worktrees. Press Enter for details
+                  or o to print the selected path.
+                </p>
+              </div>
+              <div class="code">
+                <div class="code-head">
+                  <span>Command</span
+                  ><button
+                    class="btn ghost"
+                    type="button"
+                    data-copy
+                    hidden
+                    aria-label="Copy browse interactively command"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <pre
+                  tabindex="0"
+                  aria-label="Browse interactively command"
+                ><code>wtree ui</code></pre>
+              </div>
+              <p class="copy-status" role="status"></p>
+            </div>
+            <div class="example">
+              <div class="example-copy">
+                <h3>Preview cleanup</h3>
+                <p class="note">
+                  Inspect a plan for worktrees with merged or closed pull
+                  requests. This command does not remove anything.
+                </p>
+              </div>
+              <div class="code">
+                <div class="code-head">
+                  <span>Command</span
+                  ><button
+                    class="btn ghost"
+                    type="button"
+                    data-copy
+                    hidden
+                    aria-label="Copy preview cleanup command"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <pre
+                  tabindex="0"
+                  aria-label="Preview cleanup command"
+                ><code>wtree clean --done --older-than 3mo --dry-run</code></pre>
+              </div>
+              <p class="copy-status" role="status"></p>
+            </div>
+          </div>
+        </section>
+        <section aria-labelledby="reference-title">
+          <h2 id="reference-title">Keep these close</h2>
+          <dl class="reference">
+            <dt><code>wtree new feat/example</code></dt>
+            <dd>Create a worktree or print the existing path.</dd>
+            <dt><code>wtree go</code></dt>
+            <dd>Pick a worktree or branch and print its path.</dd>
+            <dt><code>wtree path main</code></dt>
+            <dd>Print the path of an existing worktree.</dd>
+            <dt><code>wtree --json</code></dt>
+            <dd>Read the list as machine-readable JSON.</dd>
+          </dl>
+          <p class="note">
+            Cleanup asks before removal unless you pass --yes. Main and current
+            worktrees are protected; dirty, unpushed, and locked worktrees are
+            blocked unless forced. PR-filtered cleanup stops when PR state is
+            unavailable.
+          </p>
+          <div class="actions">
+            <a class="btn" href="https://github.com/filipgutica/wtree#readme"
+              >Read the full reference</a
+            >
+          </div>
+        </section>
+        <section aria-labelledby="related-title">
+          <h2 id="related-title">More tools for local work</h2>
+          <ul class="related">
+            <li>
+              <a href="https://filipgutica.github.io/annoterm/"
+                ><code>annoterm</code></a
+              >
+              <p>
+                Review Markdown in the terminal. Send precise feedback to your
+                coding agent.
+              </p>
+            </li>
+            <li>
+              <a href="https://filipgutica.github.io/devps/"
+                ><code>devps</code></a
+              >
+              <p>
+                Find your local dev servers and the sessions that started them.
+              </p>
+            </li>
+          </ul>
+          <p class="note">
+            All three tools are available from
+            <a href="https://github.com/filipgutica/homebrew-tap"
+              >Filip’s Homebrew tap</a
+            >.
+          </p>
+        </section>
+      </main>
+      <footer>
+        <a href="https://github.com/filipgutica">Built by Filip Gutica</a
+        ><a href="https://github.com/filipgutica/wtree/issues"
+          >Report an issue</a
+        ><a href="https://github.com/filipgutica/wtree/releases">Releases</a>
+      </footer>
+    </div>
+  </body>
+</html>
