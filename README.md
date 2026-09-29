@@ -1,10 +1,18 @@
 # wtree
 
-A better `git worktree list`. Shows every worktree for the current repo with its
-age, disk usage, and the state of the pull request its branch belongs to, then
-removes the ones you no longer need.
+See your Git worktrees, check their pull requests, and clean up finished work.
 
-```
+[![Release](https://img.shields.io/github/v/release/filipgutica/wtree?color=2563eb)](https://github.com/filipgutica/wtree/releases)
+[![CI](https://github.com/filipgutica/wtree/actions/workflows/ci.yml/badge.svg)](https://github.com/filipgutica/wtree/actions/workflows/ci.yml)
+[![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-000000?logo=nodedotjs)](package.json)
+[![macOS and Linux](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-555555)](.github/workflows/ci.yml)
+
+**[Website](https://filipgutica.github.io/wtree/)** · **[Quick start](#quick-start)** · **[Commands](#commands)** · **[Safety rules](#safety-rules)**
+
+wtree adds age, optional disk usage, and GitHub PR state to `git worktree list`.
+Browse worktrees in an interactive UI, create new ones, or review a cleanup plan before removing them.
+
+```text
 $ wtree
 BRANCH                  AGE   PR          SIZE  FLAGS  PATH
 main                    2d    -                 M      ~/code/api
@@ -16,45 +24,25 @@ spike/flink-cdc         8mo   -                 *↑     ../api-flink-spike
 flags: M main  @ current  * dirty  ↑ unpushed  L locked  P prunable  d detached  ✓ in default branch   path: · in ~/.wtree/<repo>/<branch>
 ```
 
-## Install
+## Quick start
 
-With Homebrew:
+Install with Homebrew:
 
 ```sh
 brew install filipgutica/tap/wtree
 ```
 
-To build and link a local checkout:
+List the current repository's worktrees, open the browser, or preview cleanup:
 
 ```sh
-npm install
-npm run build
-npm link      # puts `wtree` on your PATH
+wtree
+wtree ui
+wtree clean --done --dry-run
 ```
 
-Requires git and Node 20+. [`gh`](https://cli.github.com) is optional: without it
-(or offline, or on a non-GitHub remote) PR state shows as `?` and everything else
-still works.
-
-## Releases
-
-Changes to `main` go through pull requests. Use Conventional Commit PR titles
-and squash merge so the title becomes the release commit:
-
-- `fix: ...` releases a patch version.
-- `feat: ...` releases a minor version.
-- `feat!: ...`, another type with `!`, or a `BREAKING CHANGE:` commit-body footer
-  releases a major version, including before 1.0.
-
-Release Please opens a release PR to update `package.json`, the lockfile,
-changelog, and version manifest. Merging that PR creates a `v`-prefixed tag and
-GitHub release. This workflow does not publish to npm.
-
-The repository must allow GitHub Actions to create pull requests (Settings →
-Actions → General → Workflow permissions → **Allow GitHub Actions to create and
-approve pull requests**). PRs created with `GITHUB_TOKEN` do not trigger the PR
-checks automatically. On the release PR, select **Approve workflows to run**
-to start the required checks before merging it.
+wtree requires Git and Node.js 20 or newer. [`gh`](https://cli.github.com) supplies GitHub PR state.
+Without usable GitHub access, the list still works and shows PR state as `?`.
+Cleanup with a PR-state filter stops with an error if that state is unavailable.
 
 ## Commands
 
@@ -156,8 +144,9 @@ Other subcommands pass straight through to `wtree`.
 
 ### `wtree clean`
 
-Removes worktrees matching the filters. It always prints the plan first and asks
-before touching anything.
+Removes worktrees matching the filters. Interactive cleanup prints the plan and asks for confirmation.
+`--dry-run` prints the plan without removing anything.
+`--yes` skips the preview and confirmation for removable matches, unless `--dry-run` is also set.
 
 ```sh
 wtree clean --pr-state merged,closed --older-than 3mo    # plan, then "Remove 3 worktrees? [y/N]"
@@ -172,14 +161,13 @@ A skipped worktree says how to get past the block when a flag can:
 survived gets a `restore: wtree new <branch>` line. After a removal under
 `~/.wtree/<repo>/`, empty parent directories such as `feat/` are removed too.
 
-With no terminal to ask at (a pipe, a script, an agent, or `--json`), `clean`
-prints the plan and exits **2** unless you passed `--yes` or `--dry-run`. It will
-not block on a prompt nobody can answer, and it will not delete unasked.
+Without an interactive terminal (a pipe, script, agent, or `--json`), `clean`
+prints the plan and exits **2** unless you passed `--yes` or `--dry-run`.
+Use `--dry-run` to inspect the plan or `--yes` to execute it.
 
 A bare `wtree clean` with no filter opens `wtree ui` to pick worktrees by hand,
 but only on a terminal and without `--json`, `--yes` or `--dry-run`. In every
-other case it exits **2** without a filter. Pass `--all` if you really mean
-every non-main worktree.
+other case it exits **2** without a filter. Pass `--all` to consider every non-main worktree.
 
 ### `wtree rm`
 
@@ -197,13 +185,12 @@ wtree rm feat/foo ../api-spike -y -d   # two worktrees, no prompt, delete branch
 
 ### Prunable worktrees
 
-A worktree is *prunable* (`P`) when git can no longer validate it: its `.git`
+A worktree is *prunable* (`P`) when Git can no longer validate it: its `.git`
 file, or its whole directory, is gone. `git worktree remove` refuses those, so
 `wtree` drops the record under `.git/worktrees` instead, one record at a time.
 
-If the directory survived, `wtree` deletes it too, because reclaiming that space
-is the point. It does that **before** pruning the record, while git's own
-bookkeeping still vouches for the path. It refuses to delete a directory that
+If the directory remains, `wtree` deletes it to reclaim disk space.
+It deletes the directory **before** pruning the record, while Git's bookkeeping still identifies the path. It refuses to delete a directory that
 contains the repo, the current directory, or a live `.git` entry, and
 `--keep-directory` turns the deletion off.
 
@@ -290,9 +277,7 @@ merged. `--force-branch-delete` forces `-D` for all of them.
 
 **Fail closed on unknown PR state.** If `gh` is missing, unauthenticated, or the
 network is down, `wtree clean --pr-state ...` (or `--done`) exits **3** with an error rather
-than reporting that nothing matched. "Could not check" and "nothing to clean" are
-different answers, and a caller that cannot tell them apart will delete the wrong
-thing or skip the right one.
+than reporting that nothing matched. Unavailable PR state is an error, not an empty cleanup result.
 
 Squash and rebase merges do not leave the branch's commits in the default branch,
 so the `✓` flag (`mergedIntoDefault`) misses them. PR state is the signal to trust;
@@ -309,9 +294,9 @@ so the `✓` flag (`mergedIntoDefault`) misses them. PR state is the signal to t
 
 ## For agents
 
-Every read command supports `--json`, and `clean` emits its plan as JSON before
-doing anything. The intended shape of "clean up my merged worktrees older than
-three months" is a single composable command, not parsed prose:
+`wtree list --json` returns worktree data. `clean --dry-run --json` returns a cleanup plan without removing anything.
+`clean --yes --json` removes eligible worktrees, then reports the plan and results.
+To clean up finished worktrees older than three months:
 
 ```sh
 wtree clean --pr-state merged,closed --older-than 3mo --dry-run --json   # plan only
@@ -328,11 +313,50 @@ Age expressions accept `12h`, `30d`, `6w`, `3mo`, `1y`, or an ISO date.
 
 `wtree ui` exits 2 rather than starting when there is no TTY.
 
-The PR list is fetched in one `gh` call and cached for 10 minutes per repo
-(`--ttl`, `--refresh`), so repeated calls are cheap.
+The PR list is fetched in one `gh` call and cached for 10 minutes per repo.
+Use `--ttl` to change the cache lifetime or `--refresh` to fetch it again.
 
-`gh pr list` returns newest-first, so on a busy repo the bulk fetch truncates away
-exactly the old PRs that old worktrees belong to. When that happens, each
-unresolved branch gets a targeted lookup, and any branch still unanswered reports
-`unknown` rather than "no PR". Raise `--pr-limit` (default 500) to widen the bulk
+`gh pr list` returns newest-first, so the bulk fetch can omit older PRs.
+Each unresolved branch then gets a targeted lookup.
+A branch that remains unanswered reports `unknown` rather than "no PR". Raise `--pr-limit` (default 500) to widen the bulk
 fetch on very large repos.
+
+## Development
+
+Clone, build, and link a local checkout:
+
+```sh
+git clone https://github.com/filipgutica/wtree.git
+cd wtree
+npm ci
+npm run build
+npm link      # puts `wtree` on your PATH
+```
+
+Run the project checks:
+
+```sh
+npm run typecheck
+npm test
+npm run build
+```
+
+## Releases
+
+Changes to `main` go through pull requests. Use Conventional Commit PR titles
+and squash merge so the title becomes the release commit:
+
+- `fix: ...` releases a patch version.
+- `feat: ...` releases a minor version.
+- `feat!: ...`, another type with `!`, or a `BREAKING CHANGE:` commit-body footer
+  releases a major version, including before 1.0.
+
+Release Please opens a release PR to update `package.json`, the lockfile,
+changelog, and version manifest. Merging that PR creates a `v`-prefixed tag and
+GitHub release. This workflow does not publish to npm.
+
+The repository must allow GitHub Actions to create pull requests (Settings →
+Actions → General → Workflow permissions → **Allow GitHub Actions to create and
+approve pull requests**). PRs created with `GITHUB_TOKEN` do not trigger the PR
+checks automatically. On the release PR, select **Approve workflows to run**
+to start the required checks before merging it.
