@@ -3,7 +3,7 @@ import { after, before, describe, it } from 'node:test';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Block } from '../src/clean.js';
+import type { Block, Plan } from '../src/clean.js';
 import {
   compactBranchLabel,
   compactPath,
@@ -125,6 +125,28 @@ describe('unblockHint', () => {
       'commit',
     );
     assert.match(out, /uncommitted changes \(--force to override\)/);
+  });
+});
+
+describe('renderPlan', () => {
+  it('keeps branch, path, removal details, and skip reasons visible in the aligned plan', () => {
+    const dirty: Block = { code: 'dirty', message: 'uncommitted changes', force: true };
+    const main: Block = { code: 'main', message: 'main worktree', force: false };
+    const plans: Plan[] = [
+      {
+        worktree: makeWorktree({ branch: 'feat/old', path: '/tmp/archive-branch', prunable: true, sizeKb: 1024 }),
+        blocks: [], overridden: [dirty], removeBranch: 'feat/old', branchDeleteSafe: false,
+      },
+      {
+        worktree: makeWorktree({ branch: 'main', path: '/tmp/primary-checkout', isMain: true }),
+        blocks: [main], overridden: [], removeBranch: null, branchDeleteSafe: false,
+      },
+    ];
+    const out = renderPlan(plans, '/tmp', 'commit');
+    for (const text of ['BRANCH', 'PATH', 'feat/old', 'archive-branch', 'primary-checkout', '1M', 'leftover directory',
+      '+branch feat/old (only if merged)', '[forced: dirty]', 'skip (1):', 'main worktree']) {
+      assert.ok(out.includes(text), `${text} missing from plan:\n${out}`);
+    }
   });
 });
 

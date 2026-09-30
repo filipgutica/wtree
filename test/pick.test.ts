@@ -62,9 +62,39 @@ describe('buildCandidates', () => {
 });
 
 describe('picker lines', () => {
-  it('round-trips the label through a tab separated line', () => {
-    const line = formatCandidateLine({ label: 'feat/a', branch: 'feat/a', path: null });
-    assert.equal(line, 'feat/a\tnew');
-    assert.equal(parsePickedLine(`${line}\n`), 'feat/a');
+  it('shows worktree state and context without changing the selected label', () => {
+    const existing = formatCandidateLine({
+      label: 'main',
+      branch: 'main',
+      path: '/tmp/wtree-main',
+    }, 6);
+    const branchOnly = formatCandidateLine({ label: 'feat/a', branch: 'feat/a', path: null }, 6);
+
+    const existingRow = existing.split('\t')[1] ?? '';
+    const branchOnlyRow = branchOnly.split('\t')[1] ?? '';
+    assert.match(existingRow, /^worktree\s+main\s+\/tmp\/wtree-main$/);
+    assert.match(branchOnlyRow, /^branch only\s+feat\/a\s+—$/);
+    assert.equal(existingRow.indexOf('/tmp/wtree-main'), branchOnlyRow.indexOf('—'));
+    assert.deepEqual(existing.split('\t').slice(2), [
+      'main', 'worktree', '/tmp/wtree-main', 'use existing worktree',
+    ]);
+    assert.deepEqual(branchOnly.split('\t').slice(2), [
+      'feat/a', 'branch only', 'no worktree yet', 'create worktree for this branch',
+    ]);
+    assert.equal(parsePickedLine(`${existing}\n`), 'main');
+    assert.equal(parsePickedLine(`${branchOnly}\n`), 'feat/a');
+  });
+
+  it('keeps a long branch and full path in the displayed row', () => {
+    const branch = 'feature/many-many-many-words-that-are-long/unique-tail';
+    const path = '/tmp/full/path/to/worktree';
+    const line = formatCandidateLine({ label: branch, branch, path });
+    const row = line.split('\t')[1] ?? '';
+
+    assert.ok(row.includes(branch));
+    assert.ok(row.includes(path));
+    assert.equal(line.split('\t')[2], branch);
+    assert.equal(line.split('\t')[4], path);
+    assert.equal(parsePickedLine(`${line}\n`), branch);
   });
 });

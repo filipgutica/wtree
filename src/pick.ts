@@ -1,5 +1,4 @@
 import { closeSync, openSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { createInterface } from 'node:readline';
 import { ReadStream } from 'node:tty';
 import { git, runWithInput } from './exec.js';
@@ -74,13 +73,24 @@ export const loadCandidates = async (cwd: string): Promise<Candidate[]> => {
   return buildCandidates({ worktrees, refs: refNames });
 };
 
-const shortenHome = (path: string): string => {
-  const home = homedir();
-  return path === home || path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
-};
+const candidateState = (c: Candidate): string => (c.path ? 'worktree' : 'branch only');
+const candidateBranch = (c: Candidate): string => c.branch ?? '(detached)';
+const branchWidth = (candidates: readonly Candidate[]): number =>
+  candidates.reduce((width, c) => Math.max(width, candidateBranch(c).length), 'BRANCH'.length);
+const candidateColumns = (c: Candidate, width: number): string =>
+  `${candidateState(c).padEnd('branch only'.length)}  ${candidateBranch(c).padEnd(width)}  ${c.path ?? '—'}`;
+const candidateHeader = (width: number): string =>
+  `${'STATE'.padEnd('branch only'.length)}  ${'BRANCH'.padEnd(width)}  PATH`;
 
-export const formatCandidateLine = (c: Candidate): string =>
-  `${c.label}\t${c.path ? shortenHome(c.path) : 'new'}`;
+export const formatCandidateLine = (c: Candidate, width = candidateBranch(c).length): string =>
+  [
+    c.label,
+    candidateColumns(c, width),
+    candidateBranch(c),
+    candidateState(c),
+    c.path ?? 'no worktree yet',
+    c.path ? 'use existing worktree' : 'create worktree for this branch',
+  ].join('\t');
 
 export const parsePickedLine = (line: string): string => (line.split('\t')[0] ?? '').trim();
 
@@ -97,17 +107,24 @@ const pickWithFzf = async ({
   candidates: readonly Candidate[];
   query?: string;
 }): Promise<PickResult | null> => {
+  const width = branchWidth(candidates);
   const args = [
-    '--height=40%',
+    '--height=90%',
     '--reverse',
     '--prompt=worktree> ',
     '--delimiter=\t',
+    '--with-nth=2',
+    '--header-lines=1',
+    '--header=enter select  ·  ↑↓ move  ·  esc cancel',
+    '--preview',
+    "printf 'branch   %s\nstatus   %s\npath     %s\n\nenter    %s\n' {3} {4} {5} {6}",
+    '--preview-window=down,50%,wrap,border-sharp',
     ...(query ? ['--query', query] : []),
   ];
   const res = await runWithInput({
     cmd: 'fzf',
     args,
-    input: candidates.map(formatCandidateLine).join('\n') + '\n',
+    input: [`0\t${candidateHeader(width)}`, ...candidates.map((c) => formatCandidateLine(c, width))].join('\n') + '\n',
   });
   if (res.code === 127) return null;
   // 1: no match, 130: interrupted. Both are the user backing out.
@@ -151,9 +168,11 @@ const pickWithPrompt = async ({
     return { status: 'cancelled' };
   }
   const width = String(shown.length).length;
+  const columnsWidth = branchWidth(shown);
+  process.stderr.write('type number + enter select  ·  blank enter cancel\n');
+  process.stderr.write(`${' '.repeat(width + 2)}${candidateHeader(columnsWidth)}\n`);
   shown.forEach((c, i) => {
-    const where = c.path ? shortenHome(c.path) : 'new';
-    process.stderr.write(`${String(i + 1).padStart(width)}) ${c.label}  ${where}\n`);
+    process.stderr.write(`${String(i + 1).padStart(width)}) ${candidateColumns(c, columnsWidth)}\n`);
   });
   process.stderr.write('worktree> ');
   const answer = (await readTtyLine(fd)).trim();

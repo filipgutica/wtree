@@ -26,7 +26,6 @@ const useColor = colorsEnabled;
 const CODES = {
   reset: `${ESC}0m`,
   dim: `${ESC}2m`,
-  reverse: `${ESC}7m`,
   bold: `${ESC}1m`,
   red: `${ESC}31m`,
   green: `${ESC}32m`,
@@ -76,12 +75,14 @@ export const clampAnsi = (text: string, width: number): string => {
   return `${out}\u2026${sawEscape ? CODES.reset : ''}`;
 };
 
-/** Mark the cursor with one uniform, full-width inverse row. */
+/** Keep row colours legible on a full-width selection background. */
 export const highlightRow = (text: string, width: number, enabled = useColor()): string => {
   if (!enabled) return text;
-  const plain = text.replace(ANSI_RE, '');
-  const padded = plain + ' '.repeat(Math.max(0, width - plain.length));
-  return `${CODES.reverse}${padded}${CODES.reset}`;
+  const background = `${ESC}100m`;
+  const padded = text + ' '.repeat(Math.max(0, width - visibleWidth(text)));
+  // paint() resets foreground and background together. Restore the selection
+  // background after each coloured cell so the highlight has no gaps.
+  return `${background}${padded.replaceAll(CODES.reset, `${CODES.reset}${background}`)}${CODES.reset}`;
 };
 
 const pad = (text: string, width: number): string =>
@@ -250,8 +251,8 @@ export const renderList = ({
 }: ListRenderOptions): string => {
   const headers = ['BRANCH', 'AGE', 'PR', ...(showSize ? ['SIZE'] : []), 'FLAGS', 'PATH'];
   const rows = worktrees.map((wt) => [
-    branchLabel(wt),
-    formatAge(ageDays(wt, ageBasis, now)),
+    wt.isCurrent ? paint(branchLabel(wt), 'cyan') : branchLabel(wt),
+    paint(formatAge(ageDays(wt, ageBasis, now)), 'dim'),
     formatPr(wt),
     ...(showSize ? [formatSize(wt.sizeKb)] : []),
     flags(wt),
@@ -325,44 +326,42 @@ export const renderPlan = (plans: Plan[], cwd: string, ageBasis: AgeBasis): stri
 
   if (removable.length > 0) {
     lines.push(paint(`remove (${removable.length}):`, 'bold'));
-    for (const plan of removable) {
+    const rows = removable.map((plan) => {
       const wt = plan.worktree;
-      const extras = [
-        formatAge(ageDays(wt, ageBasis)),
-        prStateOf(wt),
+      const details = [
         ...(wt.sizeKb !== null ? [formatSize(wt.sizeKb)] : []),
-      ].join(', ');
-      const leftover =
         wt.prunable && !wt.missing
-          ? paint(' + leftover directory', 'yellow')
-          : '';
-      const branch = plan.removeBranch
-        ? paint(
-            ` +branch ${plan.removeBranch}${plan.branchDeleteSafe ? '' : ' (only if merged)'}`,
-            'yellow',
-          )
-        : '';
-      const over =
+          ? paint('leftover directory', 'yellow') : '',
+        plan.removeBranch
+          ? paint(`+branch ${plan.removeBranch}${plan.branchDeleteSafe ? '' : ' (only if merged)'}`, 'yellow') : '',
         plan.overridden.length > 0
-          ? paint(` [forced: ${plan.overridden.map((b) => b.code).join(', ')}]`, 'red')
-          : '';
-      lines.push(
-        `  ${paint('-', 'red')} ${shortPath(wt.path, cwd)} ${paint(`(${extras})`, 'dim')}${leftover}${branch}${over}`,
-      );
-    }
+          ? paint(`[forced: ${plan.overridden.map((b) => b.code).join(', ')}]`, 'red') : '',
+      ].filter(Boolean).join(' · ');
+      return [
+        paint('-', 'red'),
+        branchLabel(wt),
+        paint(formatAge(ageDays(wt, ageBasis)), 'dim'),
+        prStateOf(wt),
+        shortPath(wt.path, cwd),
+        details,
+      ];
+    });
+    const hasDetails = rows.some((row) => row[5] !== '');
+    lines.push(table(
+      ['', 'BRANCH', 'AGE', 'PR', 'PATH', ...(hasDetails ? ['DETAILS'] : [])],
+      hasDetails ? rows : rows.map((row) => row.slice(0, -1)),
+    ));
   }
 
   if (skipped.length > 0) {
     if (lines.length > 0) lines.push('');
     lines.push(paint(`skip (${skipped.length}):`, 'bold'));
-    for (const plan of skipped) {
-      lines.push(
-        `  ${paint('·', 'dim')} ${shortPath(plan.worktree.path, cwd)} ${paint(
-          `— ${plan.blocks.map((b) => b.message).join('; ')}${unblockHint(plan.blocks)}`,
-          'dim',
-        )}`,
-      );
-    }
+    lines.push(table(['', 'BRANCH', 'PATH', 'REASON'], skipped.map((plan) => [
+      paint('·', 'dim'),
+      branchLabel(plan.worktree),
+      shortPath(plan.worktree.path, cwd),
+      paint(`${plan.blocks.map((b) => b.message).join('; ')}${unblockHint(plan.blocks)}`, 'dim'),
+    ])));
   }
 
   if (lines.length === 0) lines.push(paint('nothing matches those filters.', 'dim'));

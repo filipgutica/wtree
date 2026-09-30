@@ -32,7 +32,7 @@ import {
   visibleWidth,
 } from './render.js';
 import { run } from './exec.js';
-import { listFooter, popupSize, selectionScopeLines } from './tui-layout.js';
+import { listFooter, popupSize, previewHeight, selectionScopeLines } from './tui-layout.js';
 import type { AgeBasis, Worktree } from './types.js';
 
 export interface TuiOptions {
@@ -418,21 +418,21 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
       }
     })();
     return [
-      paint('DETAIL', 'bold'),
-      `path: ${wt.path}`,
       `branch: ${wt.branch ?? (wt.bare ? '(bare)' : `(detached ${wt.head ?? '—'})`)}`,
+      `path: ${wt.path}`,
       `head: ${wt.head ?? '—'}`,
-      `last commit: ${wt.lastCommitAt ?? '—'}`,
-      `checkout: ${wt.checkoutAt ?? '—'}`,
-      `created: ${wt.createdAt ?? '—'}`,
+      '',
+      `PR state: ${formatPr(wt)}`,
+      ...prLines,
+      '',
       `dirty: ${wt.dirty ? 'yes' : 'no'}`,
       `unpushed: ${wt.unpushed === null ? 'unknown' : wt.unpushed}`,
       `lock reason: ${wt.locked ? wt.lockReason ?? 'locked' : '—'}`,
       `prune reason: ${wt.prunable ? wt.prunableReason ?? 'prunable' : '—'}`,
-      `PR state: ${formatPr(wt)}`,
-      ...prLines,
       '',
-      paint('o open   w PR in browser   y copy path   Enter or Esc return', 'dim'),
+      `last commit: ${wt.lastCommitAt ?? '—'}`,
+      `checkout: ${wt.checkoutAt ?? '—'}`,
+      `created: ${wt.createdAt ?? '—'}`,
     ].flatMap((line) => wrapLine(line, width()));
   };
 
@@ -442,7 +442,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
     const showFlags = width() >= 45;
     const headers = ['', '', 'BRANCH', ...(showMetadata ? ['AGE', 'PR', ...(showSize ? ['SIZE'] : [])] : []), ...(showFlags ? ['FLAGS'] : []), 'PATH'];
     const rows = visible.map((wt, index) => [
-      index === cursor ? paint('>', 'cyan') : ' ',
+      index === cursor ? paint('▏', 'magenta') : ' ',
       forced.has(wt.path) ? paint('[!]', 'red')
         : selected.has(wt.path) ? paint('[x]', 'green')
           : isRemovable(wt) ? '[ ]' : paint('[-]', isForceRemovable(wt) ? 'yellow' : 'dim'),
@@ -485,6 +485,39 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
   const fit = (full: string, short: string): string =>
     visibleWidth(full) <= width() ? full : short;
 
+  const previewPane = (wt: Worktree | undefined, rows: number): string[] => {
+    if (rows === 0) return [];
+    const columns = width();
+    const innerWidth = columns - 4;
+    const content = wt ? (() => {
+      const blocks = planFor(wt).blocks;
+      const pr = wt.pr.status === 'found'
+        ? `${formatPr(wt)} · ${wt.pr.title}`
+        : wt.pr.status === 'unknown' ? `unknown (${wt.pr.reason})` : 'none';
+      const changes = [
+        wt.dirty ? paint('dirty', 'yellow') : 'clean',
+        wt.unpushed === null ? 'unpushed unknown' : `${wt.unpushed} unpushed`,
+        ...(wt.locked ? ['locked'] : []),
+        ...(wt.prunable ? ['prunable'] : []),
+      ].join(' · ');
+      return [
+        `${compactBranchLabel(wt, Math.max(1, innerWidth - 12))}  ${paint(`${formatAge(ageDays(wt, options.ageBasis))} old`, 'dim')}`,
+        `${paint('path', 'dim')}     ${compactPath({ wt, cwd: options.cwd, mainPath: null, width: Math.max(1, innerWidth - 9) })}`,
+        `${paint('PR', 'dim')}       ${pr}`,
+        `${paint('state', 'dim')}    ${changes}`,
+        `${paint('remove', 'dim')}   ${blocks.length ? `blocked: ${blocks.map((block) => block.message).join('; ')}` : 'available after review'}`,
+        `${paint('head', 'dim')}     ${wt.head ?? '—'}`,
+      ];
+    })() : ['No worktree is focused.'];
+    const shown = content.slice(0, rows - 2);
+    while (shown.length < rows - 2) shown.push('');
+    return [
+      `╭${'─'.repeat(columns - 2)}╮`,
+      ...shown.map((line) => `│ ${padCell(clampAnsi(line, innerWidth), innerWidth)} │`),
+      `╰${'─'.repeat(columns - 2)}╯`,
+    ];
+  };
+
   const listLines = (): string[] => {
     const visible = getVisibleWorktrees();
     const height = Math.max(1, terminalSize().rows);
@@ -500,9 +533,11 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
       ? '[x]' : focused && isRemovable(focused) ? '[ ]' : '[-]';
     const footer = listFooter({ columns: width(), rows: height, worktrees: visible, focused, marker,
       forceable, reviewCount: selected.size || (focused && isRemovable(focused) ? 1 : 0) });
-    // Repo, filters, scope, table header, shortcuts, legend and status.
-    const footerRows = footer.legend.length + 2;
-    const rowCapacity = Math.max(0, height - 3 - selectionLines.length - footerRows);
+    // Shortcuts stay next to the table; the focused details stay below it.
+    const footerRows = footer.legend.length + 1;
+    const headerRows = 4 + selectionLines.length;
+    const detailRows = previewHeight({ rows: height, headerRows, footerRows });
+    const rowCapacity = Math.max(0, height - headerRows - footerRows - detailRows);
     const maxScroll = Math.max(0, visible.length - rowCapacity);
     scrollTop = Math.min(scrollTop, maxScroll);
     if (cursor < scrollTop) scrollTop = cursor;
@@ -529,11 +564,11 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
       ? `${blocked}${compactBranchLabel(focused, focusedBranchWidth)} — ${compactPath({ wt: focused, cwd: '', mainPath: null, width: Math.max(1, identityWidth - focusedBranchWidth) })}`
       : `No matches${pathFilter || filterDraft ? ` for ${filterMode ? filterDraft : pathFilter}` : ` for PR: ${prFilter}`}`;
     const footerStatus = createMode ? `new worktree for branch: ${createDraft}_` : status ?? focusStatus;
-    const headerLines = [header, filterLine, ...selectionLines, tableLines[0] ?? ''];
+    const headerLines = [header, filterLine, ...selectionLines, footer.shortcuts, tableLines[0] ?? ''];
     if (visible.length === 0 && rowCapacity > 0) shownRows.push(focusStatus);
     const lines = [...headerLines, ...shownRows];
-    while (lines.length < Math.max(0, height - footerRows)) lines.push('');
-    lines.push(footer.shortcuts, ...footer.legend, footerStatus);
+    while (lines.length < Math.max(0, height - footerRows - detailRows)) lines.push('');
+    lines.push(...previewPane(focused, detailRows), ...footer.legend, footerStatus);
 
     const clamped = clampLines(lines);
     // Highlight the cursor row only when it is actually on screen.
@@ -556,9 +591,8 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
   ): void => {
     const height = Math.max(1, terminalSize().rows);
     const { start, end } = pagedWindow({ rows: height, contentLength: content.length, scroll });
-    const lines = [title, ...content.slice(start, end)];
-    while (lines.length < Math.max(1, height - 1)) lines.push('');
-    lines.push(fit(hints[0], hints[1]));
+    const lines = [title, fit(hints[0], hints[1]), ...content.slice(start, end)];
+    while (lines.length < height) lines.push('');
     output.write(`${ESC}2J${ESC}H${clampLines(lines).join('\n')}`);
   };
 

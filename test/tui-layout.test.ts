@@ -1,12 +1,23 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { listFooter, popupSize, selectionScopeLines } from '../src/tui-layout.js';
+import { listFooter, popupSize, previewHeight, selectionScopeLines } from '../src/tui-layout.js';
 import { visibleWidth } from '../src/render.js';
 import { makeWorktree } from './helpers.js';
 
 const plain = (text: string): string => text.replace(/\u001b\[[0-9;]*m/g, '');
 
 describe('responsive TUI layout', () => {
+  it('fits focused details below the list without hiding its last row or footer', () => {
+    for (const rows of [12, 20, 24, 40]) {
+      const headerRows = 5;
+      const footerRows = 3;
+      const previewRows = previewHeight({ rows, headerRows, footerRows });
+      assert.ok(previewRows >= 3);
+      assert.ok(headerRows + previewRows + footerRows + 1 <= rows);
+    }
+    assert.equal(previewHeight({ rows: 10, headerRows: 7, footerRows: 2 }), 0);
+  });
+
   it('leaves the list visible around the popup at normal and small sizes', () => {
     for (const [columns, rows] of [[80, 20], [120, 24], [160, 40], [40, 12]] as const) {
       const size = popupSize({ columns, rows });
@@ -35,7 +46,7 @@ describe('responsive TUI layout', () => {
       const shortcuts = plain(footer.shortcuts);
       for (const key of ['o open', '? help', 'q']) assert.ok(shortcuts.includes(key), shortcuts);
       if (columns >= 40) assert.ok(shortcuts.includes('f force'), shortcuts);
-      if (columns >= 80) assert.ok(shortcuts.includes('d review (3)'), shortcuts);
+      if (columns >= 80) assert.ok(shortcuts.includes('d review 3'), shortcuts);
       assert.ok([footer.shortcuts, ...footer.legend].every((line) => visibleWidth(line) <= columns));
       assert.ok(plain(footer.legend.join('\n')).includes('[-] blocked'), footer.legend.join('\n'));
       assert.ok(footer.legend.length <= (rows < 20 ? 1 : 2));
