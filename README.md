@@ -12,16 +12,20 @@ See your Git worktrees, check their pull requests, and clean up finished work.
 wtree adds age, optional disk usage, and GitHub PR state to `git worktree list`.
 Browse worktrees in an interactive UI, create new ones, or review a cleanup plan before removing them.
 
+[![wtree browser showing worktrees, shortcuts above the table, and focused details below](docs/site/wtree-ui.png)](docs/site/wtree-ui.png)
+
+Actual `wtree --no-pr ui` capture. PR state is unknown because lookup was disabled for the capture.
+
 ```text
 $ wtree
-BRANCH                  AGE   PR          SIZE  FLAGS  PATH
-main                    2d    -                 M      ~/code/api
-fix/token-refresh       4h    open  #4821       @      ../api-token-refresh
-feat/usage-charts       3mo   merged #4502            ✓ ../api-usage-charts
-chore/bump-deps         5mo   closed #4390             ../api-bump-deps
-spike/flink-cdc         8mo   -                 *↑     ../api-flink-spike
-
-flags: M main  @ current  * dirty  ↑ unpushed  L locked  P prunable  d detached  ✓ in default branch   path: · in ~/.wtree/<repo>/<branch>
+BRANCH             AGE  PR            FLAGS  PATH
+main               2d   -             M@     ~/code/demo-api
+spike/flink-cdc    8mo  -             *      ~/code/demo-api-flink-spike
+chore/bump-deps    5mo  closed #4390         ~/code/demo-api-bump-deps
+feat/usage-charts  3mo  merged #4502         ·
+fix/token-refresh  4h   open #4821    *      ·
+flags: M main  @ current  * dirty  ↑ unpushed  L locked  P prunable  d detached  ✓ in default branch
+   path: · in ~/.wtree/<repo>/<branch>
 ```
 
 ## Quick start
@@ -99,6 +103,9 @@ Picks a worktree or branch and prints its path. It uses `fzf` when it is
 installed, and a numbered list otherwise. Existing worktrees come first, then
 branches without a worktree, most recent commit first. Picking a branch without a
 worktree creates one, as `wtree new` would.
+
+The picker shows aligned worktree and branch rows. Its lower pane shows the full
+branch, path, and action for the focused row. Enter selects; Esc cancels.
 
 ```sh
 wtree go                               # pick from everything
@@ -205,6 +212,8 @@ Interactive browser: move, multi-select, filter, create, open, and delete. It
 draws on the terminal (`/dev/tty`), so stdout carries only the path you open
 with `o`; with the `wt` wrapper, `wt ui` then `o` changes into that worktree.
 Without a terminal it exits **2**, so it can never hang a script or an agent.
+The list keeps a preview of the focused worktree below the table. Enter opens
+the full, scrollable details screen.
 
 | Key | Action |
 | --- | --- |
@@ -223,7 +232,8 @@ Without a terminal it exits **2**, so it can never hang a script or an agent.
 | `?` | Toggle the help popup with shortcuts and the flags/path legend |
 | `q`, `Esc` | Quit |
 
-The footer keeps essential shortcuts and a contextual flags/selection legend visible.
+Shortcuts appear above the table. The footer keeps the contextual flags and
+selection legend visible.
 Wider, taller terminals show more hints; smaller terminals prioritize the focused
 worktree and available actions. The help popup uses at most about three quarters
 of the terminal width and three fifths of its height, keeping the list visible

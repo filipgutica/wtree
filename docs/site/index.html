@@ -86,68 +86,88 @@
           <section class="stage" data-stage aria-label="wtree in use">
             <div class="stage-head">
               <div class="tabs" data-tabs hidden aria-label="Steps"></div>
-              <p class="stage-label">Demo repository with sample pull requests. Captured from wtree 0.6.0.</p>
+              <p class="stage-label">Demo repository with sample pull requests. Captured from the current wtree UI.</p>
             </div>
             <div class="stage-body">
               <div class="frames">
                 <figure class="frame" id="frame-browse" data-tab="Browse">
                   <h3 class="frame-title">Browse</h3>
                   <div class="term-wrap" tabindex="0" role="region" aria-label="Terminal capture: Browse">
-<pre class="term" role="img" aria-label="wtree&#x27;s interactive browser listing five worktrees with age, pull request state, and flags." data-cols="100">wtree — demo-api · 5 worktrees · 2 removable overall
+<pre class="term" role="img" aria-label="wtree browser showing five demo worktrees, shortcuts above the table, and focused details below." data-cols="80">wtree — demo-api · 5 worktrees · 2 removable overall
 Rows 1–5 of 5 · s sort: age · p PR: all · filter: none · age: commit
 delete branches: off · 0 selected
-        <span class="tf-dim">BRANCH</span>                            <span class="tf-dim">AGE</span>  <span class="tf-dim">PR</span>            <span class="tf-dim">FLAGS</span>  <span class="tf-dim">PATH</span>
-<span class="tf-bg tb-fg">&gt;  [-]  main                              2d   -             M@     ~/code/demo-api                 </span>
-   <span class="tf3">[-]</span>  spike/flink-cdc                   8mo  <span class="tf-dim">-</span>             <span class="tf3">*<i>↑</i></span>     ~/code/demo-api-flink-spike
-   [ ]  chore/bump-deps                   5mo  <span class="tf1">closed</span> <span class="tf-dim">#4390</span>         ~/code/demo-api-bump-deps
-   [ ]  feat/usage-charts                 3mo  <span class="tf5">merged</span> <span class="tf-dim">#4502</span>  <span class="tf5"><i>✓</i></span>      <span class="tf-dim">·</span>
-   <span class="tf3">[-]</span>  fix/token-refresh                 4h   <span class="tf2">open</span> <span class="tf-dim">#4821</span>    <span class="tf3">*</span>      <span class="tf-dim">·</span>
+<span class="tf6">o</span> open · <span class="tf6">?</span> help · <span class="tf6">q</span> quit · <span class="tf6">Space</span> select · <span class="tf6">Enter</span> details · <span class="tf6">/</span> filter · <span class="tf6">n</span> new
+        <span class="tf-dim">BRANCH</span>                  <span class="tf-dim">AGE</span>  <span class="tf-dim">PR</span>            <span class="tf-dim">FLAGS</span>  <span class="tf-dim">PATH</span>
+<span class="tf5 tb8">▏</span><span class="tb8">  </span><span class="tf-dim tb8">[-]</span><span class="tb8">  </span><span class="tb8 tbold">main</span><span class="tb8">                    2d   </span><span class="tf-dim tb8">-</span><span class="tb8">             </span><span class="tf4 tb8">M</span><span class="tf6 tb8">@</span><span class="tb8">     ~/code/demo-api       </span>
+   <span class="tf3">[-]</span>  spike/flink-cdc         8mo  <span class="tf-dim">-</span>             <span class="tf3">*</span>      ~/code/demo…link-spike
+   [ ]  chore/bump-deps         5mo  <span class="tf1">closed</span> <span class="tf-dim">#4390</span>         ~/code/demo…-bump-deps
+   [ ]  feat/usage-charts       3mo  <span class="tf5">merged</span> <span class="tf-dim">#4502</span>         <span class="tf-dim">·</span>
+   <span class="tf3">[-]</span>  fix/token-refresh       4h   <span class="tf2">open</span> <span class="tf-dim">#4821</span>    <span class="tf3">*</span>      <span class="tf-dim">·</span>
 
-<span class="tf6">o</span> open · <span class="tf6">?</span> help · <span class="tf6">q</span> quit · <span class="tf6">/</span> filter · <span class="tf6">Space</span> select · <span class="tf6">Enter</span> details · <span class="tf6">n</span> new
-<span class="tf-dim">[-]</span> <span class="tf-dim">protected</span> · <span class="tf4">M</span> main · <span class="tf6">@</span> current · path: · default
+
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ <span class="tbold">main</span>  <span class="tf-dim">2d old</span>                                                                 │
+│ <span class="tf-dim">path</span>     ~/code/demo-api                                                     │
+│ <span class="tf-dim">PR</span>       none                                                                │
+│ <span class="tf-dim">state</span>    clean · unpushed unknown                                            │
+│ <span class="tf-dim">remove</span>   blocked: main worktree; you are inside it                           │
+│ <span class="tf-dim">head</span>     0671a0fbdd8378fe8a2beedbe63440e0a7abfe4d                            │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+<span class="tf-dim">[-] protected</span> · <span class="tf4">M</span> main · <span class="tf6">@</span> current · <span class="tf3">*</span> dirty · path: · default
 blocked: main worktree; you are inside it · <span class="tbold">main</span> — ~/code/demo-api</pre>
                   </div>
                   <figcaption class="frame-cap">
                     <code>wtree ui</code>
-                    <p>One row per worktree, with age, pull request state, and flags. <code>[-]</code> marks a worktree that cannot be removed.</p>
+                    <p>Shortcuts sit above the table, with focused worktree details below it. <code>[-]</code> marks a worktree that cannot be removed.</p>
                   </figcaption>
                 </figure>
                 <figure class="frame" id="frame-select" data-tab="Select">
                   <h3 class="frame-title">Select</h3>
                   <div class="term-wrap" tabindex="0" role="region" aria-label="Terminal capture: Select">
-<pre class="term" role="img" aria-label="wtree&#x27;s browser with two removable worktrees selected and the footer offering d to review." data-cols="100">wtree — demo-api · 5 worktrees · 2 removable overall
+<pre class="term" role="img" aria-label="wtree browser with two selected worktrees and a focused worktree preview below the table." data-cols="80">wtree — demo-api · 5 worktrees · 2 removable overall
 Rows 1–5 of 5 · s sort: age · p PR: all · filter: none · age: commit
 delete branches: off · 2 selected
-        <span class="tf-dim">BRANCH</span>                            <span class="tf-dim">AGE</span>  <span class="tf-dim">PR</span>            <span class="tf-dim">FLAGS</span>  <span class="tf-dim">PATH</span>
-   <span class="tf-dim">[-]</span>  <span class="tbold">main</span>                              2d   <span class="tf-dim">-</span>             <span class="tf4">M</span><span class="tf6">@</span>     ~/code/demo-api
-   <span class="tf3">[-]</span>  spike/flink-cdc                   8mo  <span class="tf-dim">-</span>             <span class="tf3">*<i>↑</i></span>     ~/code/demo-api-flink-spike
-   <span class="tf2">[x]</span>  chore/bump-deps                   5mo  <span class="tf1">closed</span> <span class="tf-dim">#4390</span>         ~/code/demo-api-bump-deps
-<span class="tf-bg tb-fg">&gt;  [x]  feat/usage-charts                 3mo  merged #4502  <i>✓</i>      ·                               </span>
-   <span class="tf3">[-]</span>  fix/token-refresh                 4h   <span class="tf2">open</span> <span class="tf-dim">#4821</span>    <span class="tf3">*</span>      <span class="tf-dim">·</span>
+<span class="tf6">o</span> open · <span class="tf6">?</span> help · <span class="tf6">q</span> quit · <span class="tf6">d</span> review 2 · <span class="tf6">Space</span> select · <span class="tf6">Enter</span> details · <span class="tf6">/</span> filter
+        <span class="tf-dim">BRANCH</span>                  <span class="tf-dim">AGE</span>  <span class="tf-dim">PR</span>            <span class="tf-dim">FLAGS</span>  <span class="tf-dim">PATH</span>
+   <span class="tf-dim">[-]</span>  <span class="tbold">main</span>                    2d   <span class="tf-dim">-</span>             <span class="tf4">M</span><span class="tf6">@</span>     ~/code/demo-api
+   <span class="tf3">[-]</span>  spike/flink-cdc         8mo  <span class="tf-dim">-</span>             <span class="tf3">*</span>      ~/code/demo…link-spike
+   <span class="tf2">[x]</span>  chore/bump-deps         5mo  <span class="tf1">closed</span> <span class="tf-dim">#4390</span>         ~/code/demo…-bump-deps
+<span class="tf5 tb8">▏</span><span class="tb8">  </span><span class="tf2 tb8">[x]</span><span class="tb8">  feat/usage-charts       3mo  </span><span class="tf5 tb8">merged</span><span class="tb8"> </span><span class="tf-dim tb8">#4502</span><span class="tb8">         </span><span class="tf-dim tb8">·</span><span class="tb8">                     </span>
+   <span class="tf3">[-]</span>  fix/token-refresh       4h   <span class="tf2">open</span> <span class="tf-dim">#4821</span>    <span class="tf3">*</span>      <span class="tf-dim">·</span>
 
-<span class="tf6">o</span> open · <span class="tf6">?</span> help · <span class="tf6">q</span> quit · <span class="tf6">d</span> review (2) · <span class="tf6">/</span> filter · <span class="tf6">Space</span> select · <span class="tf6">Enter</span> details · <span class="tf6">n</span> new
-<span class="tf2">[x]</span> <span class="tf2">selected</span> · <span class="tf5"><i>✓</i></span> in default branch · path: · default
+
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ feat/usage-charts  <span class="tf-dim">3mo old</span>                                                   │
+│ <span class="tf-dim">path</span>     ~/.wtree/demo-api/feat/usage-charts                                 │
+│ <span class="tf-dim">PR</span>       <span class="tf5">merged</span> <span class="tf-dim">#4502</span> · Usage charts                                         │
+│ <span class="tf-dim">state</span>    clean · unpushed unknown                                            │
+│ <span class="tf-dim">remove</span>   available after review                                              │
+│ <span class="tf-dim">head</span>     c6d048ec51635e797cb1e0b211a28c18f14a3b18                            │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+<span class="tf2">[x] selected</span> · <span class="tf4">M</span> main · <span class="tf6">@</span> current · <span class="tf3">*</span> dirty · path: · default
 selected ~/.wtree/demo-api/feat/usage-charts</pre>
                   </div>
                   <figcaption class="frame-cap">
                     <code>Space</code>
-                    <p>Space selects a removable row. The header counts the selection and the footer offers <kbd>d</kbd> to review it.</p>
+                    <p>Space selects a removable row. The selection count stays above the table, alongside <kbd>d</kbd> to review it.</p>
                   </figcaption>
                 </figure>
                 <figure class="frame" id="frame-review" data-tab="Review">
                   <h3 class="frame-title">Review</h3>
                   <div class="term-wrap" tabindex="0" role="region" aria-label="Terminal capture: Review">
-<pre class="term" role="img" aria-label="wtree&#x27;s confirmation screen listing the two worktrees it will remove." data-cols="100">wtree — confirmation
+<pre class="term" role="img" aria-label="wtree confirmation screen listing two worktrees to remove, with confirmation shortcuts above the plan." data-cols="80">wtree — confirmation
+<span class="tbold">y remove 2</span>  Esc cancel  b branches
 DELETE WORKTREES — also delete branches: NO
 
 will remove: 2
   REMOVE ~/.wtree/demo-api/feat/usage-charts (3mo, merged)
   REMOVE ~/code/demo-api-bump-deps (5mo, closed)
 
-skipped: 0
-
-
-<span class="tbold">Press</span> <span class="tbold">y</span> <span class="tbold">to</span> <span class="tbold">remove</span> <span class="tbold">2</span> <span class="tbold">worktrees</span>   Esc cancel   b toggle branch deletion   j/k scroll</pre>
+skipped: 0</pre>
                   </div>
                   <figcaption class="frame-cap">
                     <code>d</code>
@@ -157,15 +177,15 @@ skipped: 0
                 <figure class="frame" id="frame-list" data-tab="List">
                   <h3 class="frame-title">List</h3>
                   <div class="term-wrap" tabindex="0" role="region" aria-label="Terminal capture: List">
-<pre class="term" role="img" aria-label="wtree&#x27;s plain table of five worktrees followed by a flags legend and a cleanup hint." data-cols="100"><span class="tf-dim">BRANCH</span>             <span class="tf-dim">AGE</span>  <span class="tf-dim">PR</span>            <span class="tf-dim">FLAGS</span>  <span class="tf-dim">PATH</span>
-<span class="tbold">main</span>               2d   <span class="tf-dim">-</span>             <span class="tf4">M</span><span class="tf6">@</span>     ~/code/demo-api
-spike/flink-cdc    8mo  <span class="tf-dim">-</span>             <span class="tf3">*<i>↑</i></span>     ~/code/demo-api-flink-spike
-chore/bump-deps    5mo  <span class="tf1">closed</span> <span class="tf-dim">#4390</span>         ~/code/demo-api-bump-deps
-feat/usage-charts  3mo  <span class="tf5">merged</span> <span class="tf-dim">#4502</span>  <span class="tf5"><i>✓</i></span>      <span class="tf-dim">·</span>
-fix/token-refresh  4h   <span class="tf2">open</span> <span class="tf-dim">#4821</span>    <span class="tf3">*</span>      <span class="tf-dim">·</span>
-flags: <span class="tf4">M</span> main  <span class="tf6">@</span> current  <span class="tf3">*</span> dirty  <span class="tf3"><i>↑</i></span> unpushed  <span class="tf3">L</span> locked  <span class="tf1">P</span> prunable  <span class="tf-dim">d</span> detached  <span class="tf5"><i>✓</i></span> in default branch
-   path: <span class="tf-dim">·</span> in ~/.wtree/&lt;repo&gt;/&lt;branch&gt;
-<span class="tf-dim">2</span> <span class="tf-dim">worktrees</span> <span class="tf-dim">have</span> <span class="tf-dim">merged/closed</span> <span class="tf-dim">PRs</span> <span class="tf-dim">—</span> <span class="tf-dim">run</span> <span class="tf-dim">wtree</span> <span class="tf-dim">clean</span> <span class="tf-dim">--done</span></pre>
+<pre class="term" role="img" aria-label="wtree plain table of five worktrees followed by a flags legend and cleanup hint." data-cols="80"><span class="tf-dim">BRANCH</span>             <span class="tf-dim">AGE</span>  <span class="tf-dim">PR</span>            <span class="tf-dim">FLAGS</span>  <span class="tf-dim">PATH</span>
+<span class="tf6 tbold">main</span>               <span class="tf-dim">2d</span>   <span class="tf-dim">-</span>             <span class="tf4">M</span><span class="tf6">@</span>     ~/code/demo-api
+spike/flink-cdc    <span class="tf-dim">8mo</span>  <span class="tf-dim">-</span>             <span class="tf3">*</span>      ~/code/demo-api-flink-spike
+chore/bump-deps    <span class="tf-dim">5mo</span>  <span class="tf1">closed</span> <span class="tf-dim">#4390</span>         ~/code/demo-api-bump-deps
+feat/usage-charts  <span class="tf-dim">3mo</span>  <span class="tf5">merged</span> <span class="tf-dim">#4502</span>         <span class="tf-dim">·</span>
+fix/token-refresh  <span class="tf-dim">4h</span>   <span class="tf2">open</span> <span class="tf-dim">#4821</span>    <span class="tf3">*</span>      <span class="tf-dim">·</span>
+flags: <span class="tf4">M</span> main  <span class="tf6">@</span> current  <span class="tf3">*</span> dirty  <span class="tf3">↑</span> unpushed  <span class="tf3">L</span> locked  <span class="tf1">P</span> prunable  <span class="tf-dim">d</span> detached
+ <span class="tf5">✓</span> in default branch   path: <span class="tf-dim">·</span> in ~/.wtree/&lt;repo&gt;/&lt;branch&gt;
+<span class="tf-dim">2 worktrees have merged/closed PRs — run wtree clean --done</span></pre>
                   </div>
                   <figcaption class="frame-cap">
                     <code>wtree</code>
@@ -175,11 +195,12 @@ flags: <span class="tf4">M</span> main  <span class="tf6">@</span> current  <spa
                 <figure class="frame" id="frame-plan" data-tab="Dry run">
                   <h3 class="frame-title">Dry run</h3>
                   <div class="term-wrap" tabindex="0" role="region" aria-label="Terminal capture: Dry run">
-<pre class="term" role="img" aria-label="wtree printing a cleanup plan for two worktrees and saying it is a dry run." data-cols="100"><span class="tbold">remove</span> <span class="tbold">(2):</span>
-  <span class="tf1">-</span> ~/code/demo-api-bump-deps <span class="tf-dim">(5mo,</span> <span class="tf-dim">closed)</span>
-  <span class="tf1">-</span> ~/.wtree/demo-api/feat/usage-charts <span class="tf-dim">(3mo,</span> <span class="tf-dim">merged)</span>
+<pre class="term" role="img" aria-label="wtree aligned cleanup plan for two worktrees followed by the dry run message." data-cols="80"><span class="tbold">remove (2):</span>
+   <span class="tf-dim">BRANCH</span>             <span class="tf-dim">AGE</span>  <span class="tf-dim">PR</span>      <span class="tf-dim">PATH</span>
+<span class="tf1">-</span>  chore/bump-deps    <span class="tf-dim">5mo</span>  closed  ~/code/demo-api-bump-deps
+<span class="tf1">-</span>  feat/usage-charts  <span class="tf-dim">3mo</span>  merged  ~/.wtree/demo-api/feat/usage-charts
 
-<span class="tf-dim">dry</span> <span class="tf-dim">run.</span> <span class="tf-dim">drop</span> <span class="tf-dim">--dry-run</span> <span class="tf-dim">to</span> <span class="tf-dim">remove</span> <span class="tf-dim">them.</span></pre>
+<span class="tf-dim">dry run. drop --dry-run to remove them.</span></pre>
                   </div>
                   <figcaption class="frame-cap">
                     <code>wtree clean --done --dry-run</code>

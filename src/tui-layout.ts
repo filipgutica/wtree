@@ -18,6 +18,14 @@ export const popupSize = ({ columns, rows }: { columns: number; rows: number }):
   rows: Math.max(4, Math.min(18, Math.floor(rows * 0.6), rows - 4)),
 });
 
+/** Leave at least one table row visible when adding the focused details pane. */
+export const previewHeight = ({ rows, headerRows, footerRows }: {
+  rows: number; headerRows: number; footerRows: number;
+}): number => {
+  const available = rows - headerRows - footerRows;
+  return available >= 4 ? Math.min(Math.max(3, Math.floor(rows * 0.38)), available - 1) : 0;
+};
+
 export const selectionScopeLines = ({ columns, selected, hidden, forced, deleteBranch }: {
   columns: number; selected: number; hidden: number; forced: number; deleteBranch: boolean;
 }): string[] => pack({ columns, labels: [
@@ -42,8 +50,8 @@ export const listFooter = ({ columns, rows, worktrees, focused, marker, forceabl
     : [`${paint('o', 'cyan')} open`, `${paint('?', 'cyan')} help`, paint('q', 'cyan')];
   const hints: (readonly [string, string])[] = [
     ...(forceable ? [['f', 'force'] as const] : []),
-    ...(reviewCount ? [['d', `review (${reviewCount})`] as const] : []),
-    ['/', 'filter'], ['Space', 'select'], ['Enter', 'details'], ['n', 'new'],
+    ...(reviewCount ? [['d', `review ${reviewCount}`] as const] : []),
+    ['Space', 'select'], ['Enter', 'details'], ['/', 'filter'], ['n', 'new'],
   ];
   for (const [key, label] of hints) {
     const hint = `${paint(key, 'cyan')} ${label}`;

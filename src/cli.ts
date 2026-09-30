@@ -537,7 +537,7 @@ program
       process.stdout.write(`${paint('nothing to prune.', 'dim')}\n`);
       return;
     }
-    process.stdout.write(`${preview}\n`);
+    process.stdout.write(`${paint('prune:', 'bold')}\n${preview}\n`);
 
     if (opts.dryRun) {
       process.stdout.write(`${paint('dry run. drop --dry-run to prune.', 'dim')}\n`);
