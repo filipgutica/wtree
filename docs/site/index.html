@@ -224,10 +224,10 @@ flags: <span class="tf4">M</span> main  <span class="tf6">@</span> current  <spa
             <h2 id="limits-title">Good to know</h2>
           </header>
           <div class="text-rows">
-            <p><strong>Cleanup asks first.</strong> It prints the plan and waits for your confirmation. <code>--yes</code> skips the prompt. <code>--dry-run</code> never removes.</p>
+            <p><strong>Cleanup asks first.</strong> It prints the plan and waits for your confirmation. <code>--yes</code> skips the prompt, and <code>--dry-run</code> never removes. Branches are deleted only with <code>--delete-branch</code>.</p>
             <p><strong>Blocked worktrees stay put.</strong> Main and current worktrees are never removed. Dirty, unpushed, and locked ones need <code>--force</code>.</p>
             <p><strong>Unknown pull request state stops a filtered cleanup.</strong> If <code>gh</code> is missing, signed out, or offline, <code>wtree clean --done</code> exits with an error and does not report an empty result.</p>
-            <p><strong>Scripts and agents never hang.</strong> <code>--json</code> and non-interactive use need <code>--dry-run</code> or <code>--yes</code>. Branch deletion is opt-in with <code>--delete-branch</code>.</p>
+            <p><strong>Scripts and agents never hang.</strong> Without a terminal, <code>clean</code>, <code>rm</code>, and <code>prune</code> print the plan and exit with code 2 unless you pass <code>--dry-run</code> or <code>--yes</code>. <code>wtree ui</code> also exits with code 2.</p>
             <nav class="links" aria-label="Documentation">
               <a href="https://github.com/filipgutica/wtree#readme">Full reference</a>
               <a href="https://github.com/filipgutica/wtree#safety-rules">Safety rules</a>
