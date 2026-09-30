@@ -3,22 +3,26 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>
-      wtree · See your Git worktrees, their pull requests, and what is ready to
-      clean up.
-    </title>
-    <meta
-      name="description"
-      content="See your Git worktrees, their pull requests, and what is ready to clean up."
-    />
+    <meta name="color-scheme" content="light dark" />
+    <title>wtree: Git worktrees, pull requests, and cleanup</title>
+    <meta name="description" content="See every Git worktree with its age and pull request state, then review a cleanup plan before removing anything." />
     <meta property="og:title" content="wtree" />
-    <meta
-      property="og:description"
-      content="See your Git worktrees, their pull requests, and what is ready to clean up."
-    />
+    <meta property="og:description" content="See every Git worktree with its age and pull request state, then review a cleanup plan before removing anything." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://filipgutica.github.io/wtree/" />
     <link rel="canonical" href="https://filipgutica.github.io/wtree/" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233d63dd'/%3E%3Ctext x='16' y='23' font-family='ui-monospace,Menlo,monospace' font-size='20' font-weight='700' text-anchor='middle' fill='white'%3Ew%3C/text%3E%3C/svg%3E"
+    />
+    <script>
+      try {
+        const theme = localStorage.getItem("tool-site-theme");
+        if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+      } catch {
+        /* The system theme works without storage. */
+      }
+    </script>
     <link rel="stylesheet" href="./tokens.css" />
     <link rel="stylesheet" href="./style.css" />
     <script src="./site.js" defer></script>
@@ -27,240 +31,229 @@
     <a class="skip" href="#main">Skip to content</a>
     <div class="page">
       <header class="site-header">
-        <nav class="tool-nav" aria-label="Tools">
-          <a href="https://filipgutica.github.io/annoterm/">annoterm</a
-          ><a href="https://filipgutica.github.io/wtree/" aria-current="page"
-            >wtree</a
-          ><a href="https://filipgutica.github.io/devps/">devps</a>
+        <nav class="family" aria-label="Tools">
+          <a href="https://filipgutica.github.io/annoterm/">annoterm</a>
+          <a href="https://filipgutica.github.io/wtree/" aria-current="page">wtree</a>
+          <a href="https://filipgutica.github.io/devps/">devps</a>
+          <a href="https://filipgutica.github.io/t3code/">workbench</a>
         </nav>
         <div class="segmented" role="group" aria-label="Color theme" hidden>
-          <button type="button" data-theme-choice="system" aria-pressed="true">
-            System
-          </button>
-          <button type="button" data-theme-choice="light" aria-pressed="false">
-            Light
-          </button>
-          <button type="button" data-theme-choice="dark" aria-pressed="false">
-            Dark
-          </button>
+          <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
+          <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+          <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
         </div>
       </header>
       <main id="main">
-        <div class="opening">
-          <section class="intro" aria-labelledby="title">
+        <div>
+          <section class="hero" aria-labelledby="title">
             <h1 id="title">wtree</h1>
-            <p class="tagline">See your worktrees. Finish the loose ends.</p>
-            <p class="lede">
-              Branches, pull requests, and cleanup in one terminal tool.
-            </p>
-            <div class="actions">
-              <a class="btn primary" href="#install">Install with Homebrew</a
-              ><a class="btn" href="https://github.com/filipgutica/wtree"
-                >View source</a
-              >
+            <p class="tagline">Which worktrees are still in use, and which can go.</p>
+            <p class="lede">wtree adds age, pull request state, and safe cleanup to <code>git worktree list</code>. You review the plan before anything is removed.</p>
+            <div id="install" class="prompt" data-copy-scope>
+              <span class="sigil" aria-hidden="true">$</span>
+              <code data-copy-text>brew install filipgutica/tap/wtree</code>
+              <button class="btn primary" type="button" data-copy hidden aria-label="Copy install command">Copy</button>
             </div>
-            <p class="meta">macOS and Linux · Node.js 20+ · Git required</p>
+            <p class="hint">Homebrew installs Node.js. GitHub CLI (<code>gh</code>) is optional for pull request state, and <code>fzf</code> is optional for <code>wtree go</code>. New to Homebrew? <a href="https://brew.sh/">Install it first</a>.</p>
+            <dl class="facts">
+              <div><dt>Runs on</dt><dd>macOS and Linux</dd></div>
+              <div><dt>Needs</dt><dd>Git and Node.js 20+</dd></div>
+              <div><dt>License</dt><dd>MIT</dd></div>
+              <div><dt>Source</dt><dd><a href="https://github.com/filipgutica/wtree">filipgutica/wtree</a></dd></div>
+            </dl>
           </section>
-          <figure class="preview">
-            <a
-              href="./preview.png"
-              aria-label="Open full wtree terminal preview"
-              ><img
-                src="./preview.png"
-                width="750"
-                height="400"
-                alt="The wtree interactive browser listing four worktrees in a demo repository."
-                fetchpriority="high"
-            /></a>
-            <figcaption>
-              Actual tool capture with demo data. Select to view full size.
-            </figcaption>
-          </figure>
+          <section class="stage" data-stage aria-label="wtree in use">
+            <div class="stage-head">
+              <div class="tabs" data-tabs hidden aria-label="Steps"></div>
+              <p class="stage-label">Demo repository with sample pull requests. Captured from wtree 0.6.0.</p>
+            </div>
+            <div class="stage-body">
+              <div class="frames">
+                <figure class="frame" id="frame-browse" data-tab="Browse">
+                  <h3 class="frame-title">Browse</h3>
+                  <div class="term-wrap" tabindex="0" role="region" aria-label="Terminal capture: Browse">
+<pre class="term" role="img" aria-label="wtree&#x27;s interactive browser listing five worktrees with age, pull request state, and flags." data-cols="100">wtree — demo-api · 5 worktrees · 2 removable overall
+Rows 1–5 of 5 · s sort: age · p PR: all · filter: none · age: commit
+delete branches: off · 0 selected
+        <span class="tf-dim">BRANCH</span>                            <span class="tf-dim">AGE</span>  <span class="tf-dim">PR</span>            <span class="tf-dim">FLAGS</span>  <span class="tf-dim">PATH</span>
+<span class="tf-bg tb-fg">&gt;  [-]  main                              2d   -             M@     ~/code/demo-api                 </span>
+   <span class="tf3">[-]</span>  spike/flink-cdc                   8mo  <span class="tf-dim">-</span>             <span class="tf3">*<i>↑</i></span>     ~/code/demo-api-flink-spike
+   [ ]  chore/bump-deps                   5mo  <span class="tf1">closed</span> <span class="tf-dim">#4390</span>         ~/code/demo-api-bump-deps
+   [ ]  feat/usage-charts                 3mo  <span class="tf5">merged</span> <span class="tf-dim">#4502</span>  <span class="tf5"><i>✓</i></span>      <span class="tf-dim">·</span>
+   <span class="tf3">[-]</span>  fix/token-refresh                 4h   <span class="tf2">open</span> <span class="tf-dim">#4821</span>    <span class="tf3">*</span>      <span class="tf-dim">·</span>
+
+<span class="tf6">o</span> open · <span class="tf6">?</span> help · <span class="tf6">q</span> quit · <span class="tf6">/</span> filter · <span class="tf6">Space</span> select · <span class="tf6">Enter</span> details · <span class="tf6">n</span> new
+<span class="tf-dim">[-]</span> <span class="tf-dim">protected</span> · <span class="tf4">M</span> main · <span class="tf6">@</span> current · path: · default
+blocked: main worktree; you are inside it · <span class="tbold">main</span> — ~/code/demo-api</pre>
+                  </div>
+                  <figcaption class="frame-cap">
+                    <code>wtree ui</code>
+                    <p>One row per worktree, with age, pull request state, and flags. <code>[-]</code> marks a worktree that cannot be removed.</p>
+                  </figcaption>
+                </figure>
+                <figure class="frame" id="frame-select" data-tab="Select">
+                  <h3 class="frame-title">Select</h3>
+                  <div class="term-wrap" tabindex="0" role="region" aria-label="Terminal capture: Select">
+<pre class="term" role="img" aria-label="wtree&#x27;s browser with two removable worktrees selected and the footer offering d to review." data-cols="100">wtree — demo-api · 5 worktrees · 2 removable overall
+Rows 1–5 of 5 · s sort: age · p PR: all · filter: none · age: commit
+delete branches: off · 2 selected
+        <span class="tf-dim">BRANCH</span>                            <span class="tf-dim">AGE</span>  <span class="tf-dim">PR</span>            <span class="tf-dim">FLAGS</span>  <span class="tf-dim">PATH</span>
+   <span class="tf-dim">[-]</span>  <span class="tbold">main</span>                              2d   <span class="tf-dim">-</span>             <span class="tf4">M</span><span class="tf6">@</span>     ~/code/demo-api
+   <span class="tf3">[-]</span>  spike/flink-cdc                   8mo  <span class="tf-dim">-</span>             <span class="tf3">*<i>↑</i></span>     ~/code/demo-api-flink-spike
+   <span class="tf2">[x]</span>  chore/bump-deps                   5mo  <span class="tf1">closed</span> <span class="tf-dim">#4390</span>         ~/code/demo-api-bump-deps
+<span class="tf-bg tb-fg">&gt;  [x]  feat/usage-charts                 3mo  merged #4502  <i>✓</i>      ·                               </span>
+   <span class="tf3">[-]</span>  fix/token-refresh                 4h   <span class="tf2">open</span> <span class="tf-dim">#4821</span>    <span class="tf3">*</span>      <span class="tf-dim">·</span>
+
+<span class="tf6">o</span> open · <span class="tf6">?</span> help · <span class="tf6">q</span> quit · <span class="tf6">d</span> review (2) · <span class="tf6">/</span> filter · <span class="tf6">Space</span> select · <span class="tf6">Enter</span> details · <span class="tf6">n</span> new
+<span class="tf2">[x]</span> <span class="tf2">selected</span> · <span class="tf5"><i>✓</i></span> in default branch · path: · default
+selected ~/.wtree/demo-api/feat/usage-charts</pre>
+                  </div>
+                  <figcaption class="frame-cap">
+                    <code>Space</code>
+                    <p>Space selects a removable row. The header counts the selection and the footer offers <kbd>d</kbd> to review it.</p>
+                  </figcaption>
+                </figure>
+                <figure class="frame" id="frame-review" data-tab="Review">
+                  <h3 class="frame-title">Review</h3>
+                  <div class="term-wrap" tabindex="0" role="region" aria-label="Terminal capture: Review">
+<pre class="term" role="img" aria-label="wtree&#x27;s confirmation screen listing the two worktrees it will remove." data-cols="100">wtree — confirmation
+DELETE WORKTREES — also delete branches: NO
+
+will remove: 2
+  REMOVE ~/.wtree/demo-api/feat/usage-charts (3mo, merged)
+  REMOVE ~/code/demo-api-bump-deps (5mo, closed)
+
+skipped: 0
+
+
+<span class="tbold">Press</span> <span class="tbold">y</span> <span class="tbold">to</span> <span class="tbold">remove</span> <span class="tbold">2</span> <span class="tbold">worktrees</span>   Esc cancel   b toggle branch deletion   j/k scroll</pre>
+                  </div>
+                  <figcaption class="frame-cap">
+                    <code>d</code>
+                    <p>The plan lists what will go. Nothing is removed until you press <kbd>y</kbd>. <kbd>b</kbd> also deletes the branches.</p>
+                  </figcaption>
+                </figure>
+                <figure class="frame" id="frame-list" data-tab="List">
+                  <h3 class="frame-title">List</h3>
+                  <div class="term-wrap" tabindex="0" role="region" aria-label="Terminal capture: List">
+<pre class="term" role="img" aria-label="wtree&#x27;s plain table of five worktrees followed by a flags legend and a cleanup hint." data-cols="100"><span class="tf-dim">BRANCH</span>             <span class="tf-dim">AGE</span>  <span class="tf-dim">PR</span>            <span class="tf-dim">FLAGS</span>  <span class="tf-dim">PATH</span>
+<span class="tbold">main</span>               2d   <span class="tf-dim">-</span>             <span class="tf4">M</span><span class="tf6">@</span>     ~/code/demo-api
+spike/flink-cdc    8mo  <span class="tf-dim">-</span>             <span class="tf3">*<i>↑</i></span>     ~/code/demo-api-flink-spike
+chore/bump-deps    5mo  <span class="tf1">closed</span> <span class="tf-dim">#4390</span>         ~/code/demo-api-bump-deps
+feat/usage-charts  3mo  <span class="tf5">merged</span> <span class="tf-dim">#4502</span>  <span class="tf5"><i>✓</i></span>      <span class="tf-dim">·</span>
+fix/token-refresh  4h   <span class="tf2">open</span> <span class="tf-dim">#4821</span>    <span class="tf3">*</span>      <span class="tf-dim">·</span>
+flags: <span class="tf4">M</span> main  <span class="tf6">@</span> current  <span class="tf3">*</span> dirty  <span class="tf3"><i>↑</i></span> unpushed  <span class="tf3">L</span> locked  <span class="tf1">P</span> prunable  <span class="tf-dim">d</span> detached  <span class="tf5"><i>✓</i></span> in default branch
+   path: <span class="tf-dim">·</span> in ~/.wtree/&lt;repo&gt;/&lt;branch&gt;
+<span class="tf-dim">2</span> <span class="tf-dim">worktrees</span> <span class="tf-dim">have</span> <span class="tf-dim">merged/closed</span> <span class="tf-dim">PRs</span> <span class="tf-dim">—</span> <span class="tf-dim">run</span> <span class="tf-dim">wtree</span> <span class="tf-dim">clean</span> <span class="tf-dim">--done</span></pre>
+                  </div>
+                  <figcaption class="frame-cap">
+                    <code>wtree</code>
+                    <p>The same data as a plain table. It ends with a hint when there is something to clean up.</p>
+                  </figcaption>
+                </figure>
+                <figure class="frame" id="frame-plan" data-tab="Dry run">
+                  <h3 class="frame-title">Dry run</h3>
+                  <div class="term-wrap" tabindex="0" role="region" aria-label="Terminal capture: Dry run">
+<pre class="term" role="img" aria-label="wtree printing a cleanup plan for two worktrees and saying it is a dry run." data-cols="100"><span class="tbold">remove</span> <span class="tbold">(2):</span>
+  <span class="tf1">-</span> ~/code/demo-api-bump-deps <span class="tf-dim">(5mo,</span> <span class="tf-dim">closed)</span>
+  <span class="tf1">-</span> ~/.wtree/demo-api/feat/usage-charts <span class="tf-dim">(3mo,</span> <span class="tf-dim">merged)</span>
+
+<span class="tf-dim">dry</span> <span class="tf-dim">run.</span> <span class="tf-dim">drop</span> <span class="tf-dim">--dry-run</span> <span class="tf-dim">to</span> <span class="tf-dim">remove</span> <span class="tf-dim">them.</span></pre>
+                  </div>
+                  <figcaption class="frame-cap">
+                    <code>wtree clean --done --dry-run</code>
+                    <p>Prints the cleanup plan for merged and closed pull requests. A dry run removes nothing.</p>
+                  </figcaption>
+                </figure>
+              </div>
+              <aside class="legend" aria-labelledby="legend-title">
+                <h3 id="legend-title">On screen</h3>
+                <dl style="--cols: 3">
+                  <div><dt>[-]</dt><dd>Blocked. The status line says why.</dd></div>
+                  <div><dt>M  @</dt><dd>M is the main worktree. @ is the one you are in.</dd></div>
+                  <div><dt>*  ↑</dt><dd>Uncommitted changes, or commits not pushed yet.</dd></div>
+                  <div><dt>✓</dt><dd>Merged into the default branch. Squash and rebase merges do not show it, so trust the PR column.</dd></div>
+                  <div><dt>PR</dt><dd>open, merged, closed, or - for none. ? means GitHub state is unavailable.</dd></div>
+                  <div><dt>·</dt><dd>The path is the default, <code>~/.wtree/&lt;repo&gt;/&lt;branch&gt;</code>.</dd></div>
+                </dl>
+              </aside>
+            </div>
+          </section>
         </div>
-        <section id="install" aria-labelledby="install-title">
-          <h2 id="install-title">Install</h2>
-          <div class="example">
-            <div class="code">
-              <div class="code-head">
-                <span>Homebrew</span
-                ><button
-                  class="btn ghost"
-                  type="button"
-                  data-copy
-                  hidden
-                  aria-label="Copy homebrew command"
-                >
-                  Copy
-                </button>
-              </div>
-              <pre
-                tabindex="0"
-                aria-label="Homebrew command"
-              ><code>brew install filipgutica/tap/wtree</code></pre>
-            </div>
-            <p class="copy-status" role="status"></p>
-            <p class="note">
-              Homebrew installs Node.js. GitHub CLI (gh) is optional for pull
-              request state; fzf is optional for the picker.
-            </p>
-          </div>
-          <p class="note">
-            Install <a href="https://brew.sh/">Homebrew</a> first if the brew
-            command is unavailable. See the
-            <a href="https://github.com/filipgutica/wtree#quick-start"
-              >README</a
-            >
-            for installation details.
-          </p>
-        </section>
-        <section aria-labelledby="workflow-title">
-          <h2 id="workflow-title">Keep your worktrees in view</h2>
-          <div class="examples">
-            <div class="example">
-              <div class="example-copy">
-                <h3>List with disk usage</h3>
-                <p class="note">
-                  See every worktree in the current repository, oldest first.
-                  Size measurement is opt-in.
-                </p>
-              </div>
-              <div class="code">
-                <div class="code-head">
-                  <span>Command</span
-                  ><button
-                    class="btn ghost"
-                    type="button"
-                    data-copy
-                    hidden
-                    aria-label="Copy list with disk usage command"
-                  >
-                    Copy
-                  </button>
-                </div>
-                <pre
-                  tabindex="0"
-                  aria-label="List with disk usage command"
-                ><code>wtree --size</code></pre>
-              </div>
-              <p class="copy-status" role="status"></p>
-            </div>
-            <div class="example">
-              <div class="example-copy">
-                <h3>Browse interactively</h3>
-                <p class="note">
-                  Filter, select, and inspect worktrees. Press Enter for details
-                  or o to print the selected path.
-                </p>
-              </div>
-              <div class="code">
-                <div class="code-head">
-                  <span>Command</span
-                  ><button
-                    class="btn ghost"
-                    type="button"
-                    data-copy
-                    hidden
-                    aria-label="Copy browse interactively command"
-                  >
-                    Copy
-                  </button>
-                </div>
-                <pre
-                  tabindex="0"
-                  aria-label="Browse interactively command"
-                ><code>wtree ui</code></pre>
-              </div>
-              <p class="copy-status" role="status"></p>
-            </div>
-            <div class="example">
-              <div class="example-copy">
-                <h3>Preview cleanup</h3>
-                <p class="note">
-                  Inspect a plan for worktrees with merged or closed pull
-                  requests. This command does not remove anything.
-                </p>
-              </div>
-              <div class="code">
-                <div class="code-head">
-                  <span>Command</span
-                  ><button
-                    class="btn ghost"
-                    type="button"
-                    data-copy
-                    hidden
-                    aria-label="Copy preview cleanup command"
-                  >
-                    Copy
-                  </button>
-                </div>
-                <pre
-                  tabindex="0"
-                  aria-label="Preview cleanup command"
-                ><code>wtree clean --done --older-than 3mo --dry-run</code></pre>
-              </div>
-              <p class="copy-status" role="status"></p>
-            </div>
-          </div>
-        </section>
-        <section aria-labelledby="reference-title">
-          <h2 id="reference-title">Keep these close</h2>
-          <dl class="reference">
-            <dt><code>wtree new feat/example</code></dt>
-            <dd>Create a worktree or print the existing path.</dd>
-            <dt><code>wtree go</code></dt>
-            <dd>Pick a worktree or branch and print its path.</dd>
-            <dt><code>wtree path main</code></dt>
-            <dd>Print the path of an existing worktree.</dd>
-            <dt><code>wtree --json</code></dt>
-            <dd>Read the list as machine-readable JSON.</dd>
-          </dl>
-          <p class="note">
-            Cleanup asks before removal unless you pass --yes. Main and current
-            worktrees are protected; dirty, unpushed, and locked worktrees are
-            blocked unless forced. PR-filtered cleanup stops when PR state is
-            unavailable.
-          </p>
-          <div class="actions">
-            <a class="btn" href="https://github.com/filipgutica/wtree#readme"
-              >Read the full reference</a
-            >
-          </div>
-        </section>
-        <section aria-labelledby="related-title">
-          <h2 id="related-title">More tools for local work</h2>
-          <ul class="related">
-            <li>
-              <a href="https://filipgutica.github.io/annoterm/"
-                ><code>annoterm</code></a
-              >
-              <p>
-                Review Markdown in the terminal. Send precise feedback to your
-                coding agent.
-              </p>
-            </li>
-            <li>
-              <a href="https://filipgutica.github.io/devps/"
-                ><code>devps</code></a
-              >
-              <p>
-                Find your local dev servers and the sessions that started them.
-              </p>
-            </li>
+        <section class="split" aria-labelledby="commands-title">
+          <header>
+            <h2 id="commands-title">Commands</h2>
+            <p>The list is for the repository you are in. Cleanup asks before it removes anything.</p>
+          </header>
+          <ul class="rows">
+            <li class="row" data-copy-scope><div class="cmd"><code data-copy-text>wtree</code><button class="btn ghost" type="button" data-copy hidden aria-label="Copy list command">Copy</button></div><p>List worktrees, oldest first after the main one.</p></li>
+            <li class="row" data-copy-scope><div class="cmd"><code data-copy-text>wtree ui</code><button class="btn ghost" type="button" data-copy hidden aria-label="Copy browse command">Copy</button></div><p>Browse, filter, select, and remove worktrees.</p></li>
+            <li class="row" data-copy-scope><div class="cmd"><code data-copy-text>wtree clean --done --dry-run</code><button class="btn ghost" type="button" data-copy hidden aria-label="Copy cleanup preview command">Copy</button></div><p>Preview removing worktrees whose pull request is merged or closed.</p></li>
+            <li class="row" data-copy-scope><div class="cmd"><code data-copy-text>wtree new feat/example</code><button class="btn ghost" type="button" data-copy hidden aria-label="Copy new command">Copy</button></div><p>Create a worktree for a branch, or print the existing path.</p></li>
+            <li class="row" data-copy-scope><div class="cmd"><code data-copy-text>wtree go</code><button class="btn ghost" type="button" data-copy hidden aria-label="Copy go command">Copy</button></div><p>Pick a worktree or branch and print its path.</p></li>
+            <li class="row" data-copy-scope><div class="cmd"><code data-copy-text>wtree --size</code><button class="btn ghost" type="button" data-copy hidden aria-label="Copy size command">Copy</button></div><p>Measure disk usage with <code>du</code>. It is off by default.</p></li>
+            <li class="row" data-copy-scope><div class="cmd"><code data-copy-text>wtree --json</code><button class="btn ghost" type="button" data-copy hidden aria-label="Copy JSON command">Copy</button></div><p>Read the list as JSON.</p></li>
           </ul>
-          <p class="note">
-            All three tools are available from
-            <a href="https://github.com/filipgutica/homebrew-tap"
-              >Filip’s Homebrew tap</a
-            >.
-          </p>
+        </section>
+        <section class="split narrow" aria-labelledby="keys-title">
+          <header>
+            <h2 id="keys-title">Keys in wtree ui</h2>
+            <p>Press <kbd>?</kbd> in the app for the full list.</p>
+          </header>
+          <ul class="rows">
+            <li class="row"><kbd>Space</kbd><p>Select a worktree. Blocked ones refuse and say why.</p></li>
+            <li class="row"><kbd>Enter</kbd><p>Show the full branch and path.</p></li>
+            <li class="row"><kbd>/</kbd><p>Filter by branch or path.</p></li>
+            <li class="row"><kbd>d</kbd><p>Review removal of the selection, then confirm.</p></li>
+            <li class="row"><kbd>o</kbd><p>Exit and print the focused worktree's path.</p></li>
+            <li class="row"><kbd>n</kbd><p>Create a worktree for a branch.</p></li>
+          </ul>
+        </section>
+        <section class="split" aria-labelledby="shell-title">
+          <header>
+            <h2 id="shell-title">Change directory</h2>
+            <p>A program cannot change its parent shell's directory, so wtree ships a small wrapper.</p>
+          </header>
+          <ul class="rows">
+            <li class="row" data-copy-scope><div class="cmd"><code data-copy-text>eval "$(wtree shell-init zsh)"</code><button class="btn ghost" type="button" data-copy hidden aria-label="Copy shell setup command">Copy</button></div><p>Add this to <code>~/.zshrc</code>. Use <code>bash</code> for <code>~/.bashrc</code>.</p></li>
+            <li class="row"><code>wt go</code><p>Pick a worktree, then change into it. <code>wt new</code>, <code>wt path</code>, and <code>wt ui</code> work the same way.</p></li>
+          </ul>
+        </section>
+        <section class="split" aria-labelledby="limits-title">
+          <header>
+            <h2 id="limits-title">Good to know</h2>
+          </header>
+          <div class="text-rows">
+            <p><strong>Cleanup asks first.</strong> It prints the plan and waits for your confirmation. <code>--yes</code> skips the prompt. <code>--dry-run</code> never removes.</p>
+            <p><strong>Blocked worktrees stay put.</strong> Main and current worktrees are never removed. Dirty, unpushed, and locked ones need <code>--force</code>.</p>
+            <p><strong>Unknown pull request state stops a filtered cleanup.</strong> If <code>gh</code> is missing, signed out, or offline, <code>wtree clean --done</code> exits with an error and does not report an empty result.</p>
+            <p><strong>Scripts and agents never hang.</strong> <code>--json</code> and non-interactive use need <code>--dry-run</code> or <code>--yes</code>. Branch deletion is opt-in with <code>--delete-branch</code>.</p>
+            <nav class="links" aria-label="Documentation">
+              <a href="https://github.com/filipgutica/wtree#readme">Full reference</a>
+              <a href="https://github.com/filipgutica/wtree#safety-rules">Safety rules</a>
+            </nav>
+          </div>
+        </section>
+        <section class="split" aria-labelledby="family-title">
+          <header>
+            <h2 id="family-title">Also from Filip</h2>
+            <p>The three terminal tools install from <a href="https://github.com/filipgutica/homebrew-tap">one Homebrew tap</a>.</p>
+          </header>
+          <ul class="rows narrow">
+            <li class="row"><a href="https://filipgutica.github.io/annoterm/"><code>annoterm</code></a><p>Review Markdown in the terminal and send your comments to a coding agent as precise feedback.</p></li>
+            <li class="row"><a href="https://filipgutica.github.io/devps/"><code>devps</code></a><p>Manage local dev servers: see what started each one, jump back to it, or stop it.</p></li>
+            <li class="row"><a href="https://filipgutica.github.io/t3code/"><code>Workbench</code></a><p>Plan across repositories, organize tickets, and start agent threads in worktrees.</p></li>
+          </ul>
         </section>
       </main>
       <footer>
-        <a href="https://github.com/filipgutica">Built by Filip Gutica</a
-        ><a href="https://github.com/filipgutica/wtree/issues"
-          >Report an issue</a
-        ><a href="https://github.com/filipgutica/wtree/releases">Releases</a>
+        <a href="https://github.com/filipgutica">Built by Filip Gutica</a>
+        <nav aria-label="Project links">
+          <a href="https://github.com/filipgutica/wtree/issues">Report an issue</a>
+          <a href="https://github.com/filipgutica/wtree/releases">Releases</a>
+        </nav>
       </footer>
     </div>
+    <p id="copy-status" class="visually-hidden" role="status"></p>
   </body>
 </html>
