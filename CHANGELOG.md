@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.0](https://github.com/filipgutica/wtree/compare/v0.6.0...v0.7.0) (2026-10-05)
+
+
+### Features
+
+* clarify worktree browsing and cleanup previews ([#13](https://github.com/filipgutica/wtree/issues/13)) ([e0a8e7a](https://github.com/filipgutica/wtree/commit/e0a8e7ad1e521cc316acda26841a01fb60ecb864))
+
+
+### Performance Improvements
+
+* speed up worktree loading and expand branch details ([#15](https://github.com/filipgutica/wtree/issues/15)) ([9af4b92](https://github.com/filipgutica/wtree/commit/9af4b921dd84f9619822ff375afb6450166570e1))
+
 ## [0.6.0](https://github.com/filipgutica/wtree/compare/v0.5.0...v0.6.0) (2026-09-27)
 
 
