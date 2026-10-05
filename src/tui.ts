@@ -75,7 +75,7 @@ export const HELP_ENTRIES: readonly (readonly [key: string, description: string]
   ['d', 'review selected / focused removal'],
   ['w', 'open focused PR'],
   ['y', 'copy focused path'],
-  ['y / b / Esc', 'confirm: remove / branches / cancel'],
+  ['y / b / q or Esc', 'confirm: remove / branches / back'],
   ['?', 'toggle help'],
   ['q / Esc', 'quit / back from other screens'],
   ['Ctrl-C', 'quit from any screen'],
@@ -620,8 +620,8 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
         const noun = `${count} worktree${count === 1 ? '' : 's'}`;
         const branches = deleteBranch ? ' and their branches' : '';
         renderPaged('wtree — confirmation', content, confirmScroll, [
-          `${paint(`Press y to remove ${noun}${branches}`, 'bold')}   Esc cancel   b toggle branch deletion   j/k scroll`,
-          `${paint(`y remove ${count}`, 'bold')}  Esc cancel  b branches`,
+          `${paint(`Press y to remove ${noun}${branches}`, 'bold')}   q/Esc back   b toggle branch deletion   j/k scroll`,
+          `${paint(`y remove ${count}`, 'bold')}  q/Esc back  b branches`,
         ]);
         break;
       }
@@ -1304,7 +1304,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
   };
 
   const handlePagedKey = (str: string, key: Key): void => {
-    if (str === 'q') {
+    if (str === 'q' && screen !== 'confirm') {
       finish(0);
       return;
     }
@@ -1343,7 +1343,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
       } else if (str === 'y') {
         void performDeletion();
         return;
-      } else if (isEscape(key)) {
+      } else if (isEscape(key) || str === 'q') {
         screen = 'list';
         status = 'deletion cancelled';
       }

@@ -214,6 +214,8 @@ with `o`; with the `wt` wrapper, `wt ui` then `o` changes into that worktree.
 Without a terminal it exits **2**, so it can never hang a script or an agent.
 The list keeps a preview of the focused worktree below the table. Enter opens
 the full, scrollable details screen.
+After `d` opens the removal review, press `q` or `Esc` to return to the list
+without removing anything. Your selection and focus are preserved.
 
 | Key | Action |
 | --- | --- |
