@@ -104,6 +104,58 @@ const listPrs = async (cwd: string, args: string[]): Promise<GhPr[] | string> =>
   }
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isGhPr = (value: unknown): value is GhPr =>
+  isRecord(value) && Number.isSafeInteger(value.number) &&
+  (value.state === 'OPEN' || value.state === 'CLOSED' || value.state === 'MERGED') &&
+  typeof value.title === 'string' && typeof value.url === 'string' &&
+  typeof value.headRefName === 'string' && typeof value.updatedAt === 'string' &&
+  (value.mergedAt === null || typeof value.mergedAt === 'string') &&
+  (value.closedAt === null || typeof value.closedAt === 'string') &&
+  typeof value.isCrossRepository === 'boolean';
+
+/** Null requests the bulk fallback when a branch has more than one page of PRs. */
+const listBranchPrs = async ({ cwd, branches }: {
+  cwd: string; branches: readonly string[];
+}): Promise<Record<string, GhPr | null> | string | null> => {
+  if (branches.length === 0) return {};
+  const fields = branches.map((branch, index) =>
+    `b${index}: pullRequests(headRefName: ${JSON.stringify(branch)}, first: 100,
+      states: [OPEN, CLOSED, MERGED], orderBy: {field: CREATED_AT, direction: DESC}) {
+      nodes { ${PR_FIELDS.replaceAll(',', ' ')} } pageInfo { hasNextPage }
+    }`,
+  ).join('\n');
+  const res = await run({ cmd: 'gh', cwd, timeoutMs: 60_000, args: [
+    'api', 'graphql', '-F', 'owner={owner}', '-F', 'repo={repo}', '-f',
+    `query=query($owner: String!, $repo: String!) {
+      repository(owner: $owner, name: $repo) { ${fields} }
+    }`,
+  ] });
+  if (!res.ok) return res.stderr.trim().split('\n')[0] || 'gh api graphql failed';
+  try {
+    const response: unknown = JSON.parse(res.stdout);
+    if (!isRecord(response) || !isRecord(response.data) || !isRecord(response.data.repository) ||
+      (Array.isArray(response.errors) && response.errors.length > 0)) return 'could not resolve PRs from gh output';
+    const entries: [string, GhPr | null][] = [];
+    for (const [index, branch] of branches.entries()) {
+      const connection = response.data.repository[`b${index}`];
+      if (!isRecord(connection) || !isRecord(connection.pageInfo) ||
+        typeof connection.pageInfo.hasNextPage !== 'boolean' || !Array.isArray(connection.nodes) ||
+        !connection.nodes.every(isGhPr) || connection.nodes.some((pr) => pr.headRefName !== branch)) {
+        return 'could not resolve PRs from gh output';
+      }
+      // An incomplete history could hide the same-repo PR that wins over fork PRs.
+      if (connection.pageInfo.hasNextPage) return null;
+      entries.push([branch, bestPerBranch(connection.nodes).get(branch) ?? null]);
+    }
+    return Object.fromEntries(entries);
+  } catch {
+    return 'could not parse gh output';
+  }
+};
+
 interface CacheShape {
   at: number;
   /** branch -> PR, or null for "asked and there is none". */
@@ -140,10 +192,9 @@ export interface LoadPrIndexOptions {
 /**
  * Resolve the PR for each branch we care about.
  *
- * One bulk `gh pr list` covers the common case. That list is newest-first, so on
- * a busy repo it truncates away exactly the old PRs that old worktrees belong to;
- * when it does, each still-unresolved branch gets a targeted lookup. Branches we
- * never managed to ask about stay out of the map and read as unknown, never "none".
+ * The default path batches lookups for current branches. Custom bulk limits,
+ * large worktree lists and paginated branch histories retain `gh pr list` with
+ * targeted lookups. Unanswered branches stay unknown, never "none".
  *
  * Any failure (no gh, not authenticated, offline, non-GitHub remote) returns
  * `available: false` so PR state degrades instead of failing the run.
@@ -178,35 +229,41 @@ export const loadPrIndex = async ({
     }
   }
 
-  const bulk = await listPrs(cwd, ['--limit', String(limit)]);
-  if (typeof bulk === 'string') return { available: false, reason: bulk };
+  const batched = limit === 500 && wanted.length <= MAX_TARGETED_LOOKUPS
+    ? await listBranchPrs({ cwd, branches: wanted }) : null;
+  if (typeof batched === 'string') return { available: false, reason: batched };
 
-  const best = bestPerBranch(bulk);
-  const entries: Record<string, GhPr | null> = {};
-  const truncated = bulk.length >= limit;
+  const entries: Record<string, GhPr | null> = batched ?? {};
+  let truncated = false;
+  if (batched === null) {
+    const bulk = await listPrs(cwd, ['--limit', String(limit)]);
+    if (typeof bulk === 'string') return { available: false, reason: bulk };
+    const best = bestPerBranch(bulk);
+    truncated = bulk.length >= limit;
 
-  const missing: string[] = [];
-  for (const branch of wanted) {
-    const hit = best.get(branch);
-    if (hit) entries[branch] = hit;
-    else if (truncated) missing.push(branch);
-    // Not truncated and not present means the repo genuinely has no PR for it.
-    else entries[branch] = null;
-  }
+    const missing: string[] = [];
+    for (const branch of wanted) {
+      const hit = best.get(branch);
+      if (hit) entries[branch] = hit;
+      else if (truncated) missing.push(branch);
+      // Not truncated and not present means the repo genuinely has no PR for it.
+      else entries[branch] = null;
+    }
 
-  if (missing.length > 0) {
-    const askable = missing.slice(0, MAX_TARGETED_LOOKUPS);
-    const found = await mapLimit(askable, 6, async (branch) => {
-      const res = await listPrs(cwd, ['--head', branch, '--limit', '20']);
-      // A failed call and a genuine absence must stay distinguishable: only an
-      // answered lookup may record `none`, or we are back to guessing.
-      if (typeof res === 'string') return { answered: false as const };
-      return { answered: true as const, pr: bestPerBranch(res).get(branch) ?? null };
-    });
-    askable.forEach((branch, i) => {
-      const result = found[i];
-      if (result?.answered) entries[branch] = result.pr;
-    });
+    if (missing.length > 0) {
+      const askable = missing.slice(0, MAX_TARGETED_LOOKUPS);
+      const found = await mapLimit(askable, 6, async (branch) => {
+        const res = await listPrs(cwd, ['--head', branch, '--limit', '20']);
+        // A failed call and a genuine absence must stay distinguishable: only an
+        // answered lookup may record `none`, or we are back to guessing.
+        if (typeof res === 'string') return { answered: false as const };
+        return { answered: true as const, pr: bestPerBranch(res).get(branch) ?? null };
+      });
+      askable.forEach((branch, i) => {
+        const result = found[i];
+        if (result?.answered) entries[branch] = result.pr;
+      });
+    }
   }
 
   try {

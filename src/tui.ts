@@ -16,6 +16,7 @@ import type { Collection } from './enrich.js';
 import type { RepoContext } from './git.js';
 import { ageDays, prStateOf, sortWorktrees, type SortKey } from './filter.js';
 import {
+  branchLabel,
   compactBranchLabel,
   compactPath,
   flags,
@@ -74,7 +75,7 @@ export const HELP_ENTRIES: readonly (readonly [key: string, description: string]
   ['d', 'review selected / focused removal'],
   ['w', 'open focused PR'],
   ['y', 'copy focused path'],
-  ['y / b / Esc', 'confirm: remove / branches / cancel'],
+  ['y / b / q or Esc', 'confirm: remove / branches / back'],
   ['?', 'toggle help'],
   ['q / Esc', 'quit / back from other screens'],
   ['Ctrl-C', 'quit from any screen'],
@@ -501,7 +502,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
         ...(wt.prunable ? ['prunable'] : []),
       ].join(' · ');
       return [
-        `${compactBranchLabel(wt, Math.max(1, innerWidth - 12))}  ${paint(`${formatAge(ageDays(wt, options.ageBasis))} old`, 'dim')}`,
+        ...wrapLine(`${branchLabel(wt, Infinity)}  ${formatAge(ageDays(wt, options.ageBasis))} old`, innerWidth),
         `${paint('path', 'dim')}     ${compactPath({ wt, cwd: options.cwd, mainPath: null, width: Math.max(1, innerWidth - 9) })}`,
         `${paint('PR', 'dim')}       ${pr}`,
         `${paint('state', 'dim')}    ${changes}`,
@@ -559,7 +560,8 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
     const blocks = focused ? planFor(focused).blocks : [];
     const blocked = blocks.length > 0 ? `blocked: ${blocks.map((block) => block.message).join('; ')} · ` : '';
     const identityWidth = Math.max(2, width() - visibleWidth(blocked) - 3);
-    const focusedBranchWidth = Math.max(1, Math.min(42, Math.floor(identityWidth / 2)));
+    const focusedBranchWidth = focused
+      ? Math.max(1, Math.min(identityWidth - 1, visibleWidth(branchLabel(focused, Infinity)))) : 1;
     const focusStatus = focused
       ? `${blocked}${compactBranchLabel(focused, focusedBranchWidth)} — ${compactPath({ wt: focused, cwd: '', mainPath: null, width: Math.max(1, identityWidth - focusedBranchWidth) })}`
       : `No matches${pathFilter || filterDraft ? ` for ${filterMode ? filterDraft : pathFilter}` : ` for PR: ${prFilter}`}`;
@@ -618,8 +620,8 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
         const noun = `${count} worktree${count === 1 ? '' : 's'}`;
         const branches = deleteBranch ? ' and their branches' : '';
         renderPaged('wtree — confirmation', content, confirmScroll, [
-          `${paint(`Press y to remove ${noun}${branches}`, 'bold')}   Esc cancel   b toggle branch deletion   j/k scroll`,
-          `${paint(`y remove ${count}`, 'bold')}  Esc cancel  b branches`,
+          `${paint(`Press y to remove ${noun}${branches}`, 'bold')}   q/Esc back   b toggle branch deletion   j/k scroll`,
+          `${paint(`y remove ${count}`, 'bold')}  q/Esc back  b branches`,
         ]);
         break;
       }
@@ -1302,7 +1304,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
   };
 
   const handlePagedKey = (str: string, key: Key): void => {
-    if (str === 'q') {
+    if (str === 'q' && screen !== 'confirm') {
       finish(0);
       return;
     }
@@ -1341,7 +1343,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
       } else if (str === 'y') {
         void performDeletion();
         return;
-      } else if (isEscape(key)) {
+      } else if (isEscape(key) || str === 'q') {
         screen = 'list';
         status = 'deletion cancelled';
       }

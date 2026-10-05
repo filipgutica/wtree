@@ -214,6 +214,8 @@ with `o`; with the `wt` wrapper, `wt ui` then `o` changes into that worktree.
 Without a terminal it exits **2**, so it can never hang a script or an agent.
 The list keeps a preview of the focused worktree below the table. Enter opens
 the full, scrollable details screen.
+After `d` opens the removal review, press `q` or `Esc` to return to the list
+without removing anything. Your selection and focus are preserved.
 
 | Key | Action |
 | --- | --- |
@@ -323,13 +325,15 @@ Age expressions accept `12h`, `30d`, `6w`, `3mo`, `1y`, or an ISO date.
 
 `wtree ui` exits 2 rather than starting when there is no TTY.
 
-The PR list is fetched in one `gh` call and cached for 10 minutes per repo.
+By default, PR lookup batches up to 60 current branches in one `gh` GraphQL call.
+It runs alongside local Git checks. Results are cached for 10 minutes per repo.
 Use `--ttl` to change the cache lifetime or `--refresh` to fetch it again.
 
-`gh pr list` returns newest-first, so the bulk fetch can omit older PRs.
-Each unresolved branch then gets a targeted lookup.
-A branch that remains unanswered reports `unknown` rather than "no PR". Raise `--pr-limit` (default 500) to widen the bulk
-fetch on very large repos.
+More than 60 branches, a paginated branch history, or a non-default `--pr-limit`
+uses the bulk `gh pr list` lookup with per-branch follow-ups.
+The bulk fetch returns newest-first and can omit older PRs.
+Raise `--pr-limit` (default 500) to widen that fetch.
+Failed or unanswered lookups report `unknown` rather than "no PR".
 
 ## Development
 
@@ -341,6 +345,17 @@ cd wtree
 npm ci
 npm run build
 npm link      # puts `wtree` on your PATH
+```
+
+For local PR review, always point `wtree-local` at the PR checkout's build.
+After every push, rebuild and relink it before requesting local review.
+Use a writable directory on your PATH. For macOS with Homebrew:
+
+```sh
+npm run build
+ln -sfn "$PWD/dist/cli.js" /opt/homebrew/bin/wtree-local
+readlink /opt/homebrew/bin/wtree-local   # must point to this PR checkout's dist/cli.js
+wtree-local --version
 ```
 
 Run the project checks:

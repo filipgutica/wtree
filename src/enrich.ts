@@ -48,9 +48,9 @@ export const collect = async ({
     readAdminDirs(repo.commonDir),
   ]);
 
-  const prIndex = noPr
-    ? ({ available: false, reason: '--no-pr' } satisfies PrIndex)
-    : await loadPrIndex({
+  const prIndexPromise = noPr
+    ? Promise.resolve({ available: false, reason: '--no-pr' } satisfies PrIndex)
+    : loadPrIndex({
         cwd: repo.root,
         commonDir: repo.commonDir,
         remoteUrl: repo.remoteUrl,
@@ -60,7 +60,7 @@ export const collect = async ({
         ...(prLimit !== undefined ? { limit: prLimit } : {}),
       });
 
-  const worktrees = await mapLimit(raw, concurrency, async (entry, index): Promise<Worktree> => {
+  const localWorktreesPromise = mapLimit(raw, concurrency, async (entry, index): Promise<Omit<Worktree, 'pr'>> => {
     const path = resolve(entry.path);
     const exists = await pathExists(path);
     // The first porcelain record always owns the common git dir.
@@ -96,10 +96,11 @@ export const collect = async ({
       unpushed,
       mergedIntoDefault,
       sizeKb,
-      pr: prFor(prIndex, entry.branch),
     };
   });
 
+  const [prIndex, localWorktrees] = await Promise.all([prIndexPromise, localWorktreesPromise]);
+  const worktrees = localWorktrees.map((wt): Worktree => ({ ...wt, pr: prFor(prIndex, wt.branch) }));
   return { worktrees, prIndex };
 };
 
