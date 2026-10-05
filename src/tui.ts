@@ -16,6 +16,7 @@ import type { Collection } from './enrich.js';
 import type { RepoContext } from './git.js';
 import { ageDays, prStateOf, sortWorktrees, type SortKey } from './filter.js';
 import {
+  branchLabel,
   compactBranchLabel,
   compactPath,
   flags,
@@ -501,7 +502,7 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
         ...(wt.prunable ? ['prunable'] : []),
       ].join(' · ');
       return [
-        `${compactBranchLabel(wt, Math.max(1, innerWidth - 12))}  ${paint(`${formatAge(ageDays(wt, options.ageBasis))} old`, 'dim')}`,
+        ...wrapLine(`${branchLabel(wt, Infinity)}  ${formatAge(ageDays(wt, options.ageBasis))} old`, innerWidth),
         `${paint('path', 'dim')}     ${compactPath({ wt, cwd: options.cwd, mainPath: null, width: Math.max(1, innerWidth - 9) })}`,
         `${paint('PR', 'dim')}       ${pr}`,
         `${paint('state', 'dim')}    ${changes}`,
@@ -559,7 +560,8 @@ export const runTui = async (options: TuiOptions): Promise<TuiResult> => {
     const blocks = focused ? planFor(focused).blocks : [];
     const blocked = blocks.length > 0 ? `blocked: ${blocks.map((block) => block.message).join('; ')} · ` : '';
     const identityWidth = Math.max(2, width() - visibleWidth(blocked) - 3);
-    const focusedBranchWidth = Math.max(1, Math.min(42, Math.floor(identityWidth / 2)));
+    const focusedBranchWidth = focused
+      ? Math.max(1, Math.min(identityWidth - 1, visibleWidth(branchLabel(focused, Infinity)))) : 1;
     const focusStatus = focused
       ? `${blocked}${compactBranchLabel(focused, focusedBranchWidth)} — ${compactPath({ wt: focused, cwd: '', mainPath: null, width: Math.max(1, identityWidth - focusedBranchWidth) })}`
       : `No matches${pathFilter || filterDraft ? ` for ${filterMode ? filterDraft : pathFilter}` : ` for PR: ${prFilter}`}`;
