@@ -195,6 +195,7 @@ onUnmounted(() => {
           <li class="row">
             <div class="cmd">
               <UiCodeBlock
+                variant="compact"
                 code="wtree"
                 language="bash"
                 :copyable="enhanced"
@@ -206,6 +207,7 @@ onUnmounted(() => {
           <li class="row">
             <div class="cmd">
               <UiCodeBlock
+                variant="compact"
                 code="wtree ui"
                 language="bash"
                 :copyable="enhanced"
@@ -217,6 +219,7 @@ onUnmounted(() => {
           <li class="row">
             <div class="cmd">
               <UiCodeBlock
+                variant="compact"
                 code="wtree clean --done --dry-run"
                 language="bash"
                 :copyable="enhanced"
@@ -230,6 +233,7 @@ onUnmounted(() => {
           <li class="row">
             <div class="cmd">
               <UiCodeBlock
+                variant="compact"
                 code="wtree new feat/example"
                 language="bash"
                 :copyable="enhanced"
@@ -241,6 +245,7 @@ onUnmounted(() => {
           <li class="row">
             <div class="cmd">
               <UiCodeBlock
+                variant="compact"
                 code="wtree go"
                 language="bash"
                 :copyable="enhanced"
@@ -252,6 +257,7 @@ onUnmounted(() => {
           <li class="row">
             <div class="cmd">
               <UiCodeBlock
+                variant="compact"
                 code="wtree --size"
                 language="bash"
                 :copyable="enhanced"
@@ -265,6 +271,7 @@ onUnmounted(() => {
           <li class="row">
             <div class="cmd">
               <UiCodeBlock
+                variant="compact"
                 code="wtree --json"
                 language="bash"
                 :copyable="enhanced"
@@ -319,6 +326,7 @@ onUnmounted(() => {
           <li class="row">
             <div class="cmd">
               <UiCodeBlock
+                variant="compact"
                 :code="shellSetup"
                 language="bash"
                 :copyable="enhanced"
