@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { UiButton } from '@filipgutica/ui';
 import type { Capture } from '../captures';
 import CapturePreview from './CapturePreview.vue';
 
@@ -18,11 +17,22 @@ const expand = (event: MouseEvent) => {
 
 <template>
   <figure :id="`frame-${capture.id}`" class="frame" :data-tab="capture.label">
-    <CapturePreview
-      :html="capture.html"
-      :label="`Terminal capture: ${capture.label}`"
-      :fit="enhanced"
-    />
+    <div class="capture-preview">
+      <CapturePreview
+        :html="capture.html"
+        :label="`Terminal capture: ${capture.label}`"
+        :fit="enhanced"
+      />
+      <button
+        v-if="enhanced"
+        type="button"
+        class="capture-open"
+        :aria-label="`Expand ${capture.label} capture`"
+        aria-haspopup="dialog"
+        :title="`Open ${capture.label} capture at full size`"
+        @click="expand"
+      />
+    </div>
     <figcaption class="frame-cap">
       <code>{{ capture.command }}</code>
       <p v-if="capture.id === 'browse'">
@@ -45,16 +55,6 @@ const expand = (event: MouseEvent) => {
         Prints the cleanup plan for merged and closed pull requests. A dry run
         removes nothing.
       </p>
-      <UiButton
-        v-if="enhanced"
-        variant="secondary"
-        size="lg"
-        class="capture-expand"
-        :aria-label="`Expand ${capture.label} capture`"
-        aria-haspopup="dialog"
-        @click="expand"
-        >Expand capture</UiButton
-      >
     </figcaption>
   </figure>
 </template>

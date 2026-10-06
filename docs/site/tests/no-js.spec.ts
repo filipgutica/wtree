@@ -6,6 +6,9 @@ for (const width of [320, 390, 768, 801, 1280]) {
   }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/wtree/');
+    await expect(page.getByRole('link', { name: 'wtree home' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible();
+    await expect(page.locator('.capture-open')).toHaveCount(0);
     await expect(
       page.getByRole('heading', { name: 'wtree', exact: true }),
     ).toBeVisible();
