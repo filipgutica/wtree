@@ -114,6 +114,13 @@ for (const width of [320, 390, 768, 801, 1280]) {
     await noOverflow(page);
     const header = page.locator('.page-header');
     await expect(header.getByRole('link', { name: 'wtree home' })).toBeVisible();
+    const heading = page.getByRole('heading', { level: 1 });
+    await expect(heading).toHaveText('Which worktrees are still in use, and which can go.');
+    const headerBox = await header.boundingBox();
+    const headingBox = await heading.boundingBox();
+    const introGap = (headingBox?.y ?? Infinity) - (headerBox?.y ?? 0) - (headerBox?.height ?? 0);
+    expect(introGap).toBeGreaterThanOrEqual(0);
+    expect(introGap).toBeLessThanOrEqual(width <= 640 ? 20 : 28);
     const mainNav = header.getByRole('navigation', { name: 'Main navigation' });
     await expect(mainNav.getByRole('link', { name: 'Guide', exact: true })).toHaveAttribute(
       'href', 'https://github.com/filipgutica/wtree/blob/main/README.md',
