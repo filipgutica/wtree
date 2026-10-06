@@ -112,6 +112,18 @@ for (const width of [320, 390, 768, 801, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await load(page);
     await noOverflow(page);
+    const header = page.locator('.page-header');
+    await expect(header.getByRole('link', { name: 'wtree home' })).toBeVisible();
+    const mainNav = header.getByRole('navigation', { name: 'Main navigation' });
+    await expect(mainNav.getByRole('link', { name: 'Guide', exact: true })).toHaveAttribute(
+      'href', 'https://github.com/filipgutica/wtree/blob/main/README.md',
+    );
+    await expect(mainNav.getByRole('link', { name: 'GitHub', exact: true })).toHaveAttribute(
+      'href', 'https://github.com/filipgutica/wtree',
+    );
+    await expect(mainNav.getByRole('link', { name: 'Releases', exact: true })).toHaveAttribute(
+      'href', 'https://github.com/filipgutica/wtree/releases',
+    );
     const command = page.locator('.cmd .fg-code-block').first();
     const copy = command.getByRole('button', { name: 'Copy code' });
     const blockBox = await command.boundingBox();
@@ -272,13 +284,14 @@ test('library tabs support keyboard navigation and retained capture content', as
   ).toBeFocused();
 });
 
-test('full-size capture dialog keeps original terminal formatting and restores focus', async ({
+test('clicking the capture opens the full-size dialog and restores focus', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await load(page);
   const trigger = page.getByRole('button', { name: 'Expand Browse capture' });
-  await trigger.click();
+  await expect(page.getByText('Expand capture', { exact: true })).toHaveCount(0);
+  await page.locator('#frame-browse .capture-preview').click();
   const dialog = page.getByRole('dialog', { name: 'Browse capture' });
   await expect(dialog).toBeVisible();
   await expect(dialog.locator('.term')).toContainText('wtree — demo-api');
@@ -296,6 +309,13 @@ test('full-size capture dialog keeps original terminal formatting and restores f
   await page.keyboard.press('Escape');
   await expect(dialog).not.toBeVisible();
   await expect(trigger).toBeFocused();
+  for (const key of ['Enter', 'Space']) {
+    await page.keyboard.press(key);
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    await expect(trigger).toBeFocused();
+  }
 });
 
 test('drawer focus, dismissal, anchor destination, and desktop breakpoint', async ({

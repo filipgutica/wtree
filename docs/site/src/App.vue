@@ -80,6 +80,14 @@ onUnmounted(() => {
   <a class="skip" href="#main">Skip to content</a>
   <div class="page" :data-enhanced="enhanced">
     <SiteNavigation />
+    <header class="page-header">
+      <a class="page-brand" href="/wtree/" aria-label="wtree home">wtree</a>
+      <nav aria-label="Main navigation">
+        <a href="https://github.com/filipgutica/wtree/blob/main/README.md">Guide</a>
+        <a href="https://github.com/filipgutica/wtree">GitHub</a>
+        <a href="https://github.com/filipgutica/wtree/releases">Releases</a>
+      </nav>
+    </header>
     <main id="main" ref="main">
       <div>
         <section class="hero" aria-labelledby="title">
