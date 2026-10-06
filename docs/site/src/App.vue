@@ -91,10 +91,9 @@ onUnmounted(() => {
     <main id="main" ref="main">
       <div>
         <section class="hero" aria-labelledby="title">
-          <h1 id="title">wtree</h1>
-          <p class="tagline">
+          <h1 id="title" class="tagline">
             Which worktrees are still in use, and which can go.
-          </p>
+          </h1>
           <p class="lede">
             wtree adds age, pull request state, and safe cleanup to
             <code>git worktree list</code>. You review the plan before anything
