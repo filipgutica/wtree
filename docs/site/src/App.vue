@@ -92,12 +92,11 @@ onUnmounted(() => {
       <div>
         <section class="hero" aria-labelledby="title">
           <h1 id="title" class="tagline">
-            Which worktrees are still in use, and which can go.
+            List and clean up Git worktrees.
           </h1>
           <p class="lede">
-            wtree adds age, pull request state, and safe cleanup to
-            <code>git worktree list</code>. You review the plan before anything
-            is removed.
+            Adds age and pull request state to <code>git worktree list</code>.
+            Review cleanup before removal.
           </p>
           <div id="install" class="install-command">
             <p class="hint">Install with Homebrew</p>
@@ -110,10 +109,9 @@ onUnmounted(() => {
             />
           </div>
           <p class="hint">
-            Homebrew installs Node.js. GitHub CLI (<code>gh</code>) is optional
-            for pull request state, and <code>fzf</code> is optional for
-            <code>wtree go</code>. New to Homebrew?
-            <a href="https://brew.sh/">Install it first</a>.
+            Homebrew installs Node.js. Optional: <code>gh</code> for PR state,
+            <code>fzf</code> for <code>wtree go</code>.
+            <a href="https://brew.sh/">Install Homebrew</a> if needed.
           </p>
           <dl class="facts">
             <div>
@@ -136,8 +134,7 @@ onUnmounted(() => {
         </section>
         <section class="stage" aria-label="wtree in use">
           <p class="stage-label">
-            Demo repository with sample pull requests. Captured from the current
-            wtree UI.
+            Current wtree UI; demo repository and sample pull requests.
           </p>
           <UiTabs v-model="activeCapture" :items="captureTabs" label="Steps">
             <template #panel="{ value }">
@@ -156,35 +153,32 @@ onUnmounted(() => {
             <dl style="--cols: 3">
               <div>
                 <dt>[-]</dt>
-                <dd>Blocked. The status line says why.</dd>
+                <dd>Blocked; status explains why.</dd>
               </div>
               <div>
                 <dt>M @</dt>
-                <dd>M is the main worktree. @ is the one you are in.</dd>
+                <dd>Main / current worktree.</dd>
               </div>
               <div>
                 <dt>* ↑</dt>
-                <dd>Uncommitted changes, or commits not pushed yet.</dd>
+                <dd>Uncommitted changes / unpushed commits.</dd>
               </div>
               <div>
                 <dt>✓</dt>
                 <dd>
-                  Merged into the default branch. Squash and rebase merges do
-                  not show it, so trust the PR column.
+                  In default branch; misses squash/rebase merges. Trust PR state.
                 </dd>
               </div>
               <div>
                 <dt>PR</dt>
                 <dd>
-                  open, merged, closed, or - for none. ? means GitHub state is
-                  unavailable.
+                  open, merged, closed; - none, ? unavailable.
                 </dd>
               </div>
               <div>
                 <dt>·</dt>
                 <dd>
-                  The path is the default,
-                  <code>~/.wtree/&lt;repo&gt;/&lt;branch&gt;</code>.
+                  Default path: <code>~/.wtree/&lt;repo&gt;/&lt;branch&gt;</code>.
                 </dd>
               </div>
             </dl>
@@ -195,8 +189,7 @@ onUnmounted(() => {
         <header>
           <h2 id="commands-title">Commands</h2>
           <p>
-            The list is for the repository you are in. Cleanup asks before it
-            removes anything.
+            Uses the current repository.
           </p>
         </header>
         <ul class="rows">
@@ -210,7 +203,7 @@ onUnmounted(() => {
                 :wrap="true"
               />
             </div>
-            <p>List worktrees, oldest first after the main one.</p>
+            <p>List: main first, then oldest.</p>
           </li>
           <li class="row">
             <div class="cmd">
@@ -235,7 +228,7 @@ onUnmounted(() => {
               />
             </div>
             <p>
-              Preview removing worktrees whose pull request is merged or closed.
+              Preview worktree removal for merged or closed PRs.
             </p>
           </li>
           <li class="row">
@@ -248,7 +241,7 @@ onUnmounted(() => {
                 :wrap="true"
               />
             </div>
-            <p>Create a worktree for a branch, or print the existing path.</p>
+            <p>Create a branch's worktree or print its existing path.</p>
           </li>
           <li class="row">
             <div class="cmd">
@@ -260,7 +253,7 @@ onUnmounted(() => {
                 :wrap="true"
               />
             </div>
-            <p>Pick a worktree or branch and print its path.</p>
+            <p>Pick a worktree or branch; print its path.</p>
           </li>
           <li class="row">
             <div class="cmd">
@@ -273,7 +266,7 @@ onUnmounted(() => {
               />
             </div>
             <p>
-              Measure disk usage with <code>du</code>. It is off by default.
+              Measure disk usage with <code>du</code>; off by default.
             </p>
           </li>
           <li class="row">
@@ -286,23 +279,23 @@ onUnmounted(() => {
                 :wrap="true"
               />
             </div>
-            <p>Read the list as JSON.</p>
+            <p>List as JSON.</p>
           </li>
         </ul>
       </section>
       <section class="split narrow" aria-labelledby="keys-title">
         <header>
           <h2 id="keys-title">Keys in wtree ui</h2>
-          <p>Press <kbd>?</kbd> in the app for the full list.</p>
+          <p><kbd>?</kbd> shows all shortcuts.</p>
         </header>
         <ul class="rows">
           <li class="row">
             <kbd>Space</kbd>
-            <p>Select a worktree. Blocked ones refuse and say why.</p>
+            <p>Select; blocked worktrees explain why they refuse.</p>
           </li>
           <li class="row">
             <kbd>Enter</kbd>
-            <p>Show the full branch and path.</p>
+            <p>Full branch and path.</p>
           </li>
           <li class="row">
             <kbd>/</kbd>
@@ -310,15 +303,15 @@ onUnmounted(() => {
           </li>
           <li class="row">
             <kbd>d</kbd>
-            <p>Review removal of the selection, then confirm.</p>
+            <p>Review selected removals, then confirm.</p>
           </li>
           <li class="row">
             <kbd>o</kbd>
-            <p>Exit and print the focused worktree's path.</p>
+            <p>Exit; print the focused worktree's path.</p>
           </li>
           <li class="row">
             <kbd>n</kbd>
-            <p>Create a worktree for a branch.</p>
+            <p>Create a branch's worktree.</p>
           </li>
         </ul>
       </section>
@@ -326,8 +319,7 @@ onUnmounted(() => {
         <header>
           <h2 id="shell-title">Change directory</h2>
           <p>
-            A program cannot change its parent shell's directory, so wtree ships
-            a small wrapper.
+            The <code>wt</code> wrapper changes your shell's directory.
           </p>
         </header>
         <ul class="rows">
@@ -342,15 +334,14 @@ onUnmounted(() => {
               />
             </div>
             <p>
-              Add this to <code>~/.zshrc</code>. Use <code>bash</code> for
-              <code>~/.bashrc</code>.
+              Add to <code>~/.zshrc</code>; use <code>bash</code> for <code>~/.bashrc</code>.
             </p>
           </li>
           <li class="row">
             <code>wt go</code>
             <p>
-              Pick a worktree, then change into it. <code>wt new</code>,
-              <code>wt path</code>, and <code>wt ui</code> work the same way.
+              Pick and change directory. Also: <code>wt new</code>,
+              <code>wt path</code>, <code>wt ui</code>.
             </p>
           </li>
         </ul>
@@ -361,30 +352,23 @@ onUnmounted(() => {
         </header>
         <div class="text-rows">
           <p>
-            <strong>Cleanup asks first.</strong> It prints the plan and waits
-            for your confirmation. <code>--yes</code> skips the prompt, and
-            <code>--dry-run</code> never removes. Branches are deleted only with
-            <code>--delete-branch</code>.
+            <strong>Cleanup:</strong> review the plan, then confirm. <code>--yes</code>
+            skips confirmation; <code>--dry-run</code> never removes.
+            Branch deletion requires <code>--delete-branch</code>.
           </p>
           <p>
-            <strong>Blocked worktrees stay put.</strong> Main and current
-            worktrees are never removed. Dirty, unpushed, and locked ones need
-            <code>--force</code>.
+            <strong>Protected:</strong> main and current worktrees are never removed.
+            Dirty, unpushed, or locked worktrees require <code>--force</code>.
           </p>
           <p>
-            <strong
-              >Unknown pull request state stops a filtered cleanup.</strong
-            >
-            If <code>gh</code> is missing, signed out, or offline,
-            <code>wtree clean --done</code> exits with an error and does not
-            report an empty result.
+            <strong>Unknown PR state stops filtered cleanup.</strong>
+            Missing, signed-out, or offline <code>gh</code> makes
+            <code>wtree clean --done</code> fail, rather than report no matches.
           </p>
           <p>
-            <strong>Scripts and agents never hang.</strong> Without a terminal,
-            <code>clean</code>, <code>rm</code>, and <code>prune</code> print
-            the plan and exit with code 2 unless you pass
-            <code>--dry-run</code> or <code>--yes</code>.
-            <code>wtree ui</code> also exits with code 2.
+            <strong>Without a terminal:</strong> <code>clean</code>, <code>rm</code>, and
+            <code>prune</code> print the plan and exit 2 unless given
+            <code>--dry-run</code> or <code>--yes</code>. <code>wtree ui</code> exits 2.
           </p>
           <nav class="links" aria-label="Documentation">
             <a href="https://github.com/filipgutica/wtree#readme"
@@ -400,10 +384,9 @@ onUnmounted(() => {
         <header>
           <h2 id="family-title">Also from Filip</h2>
           <p>
-            The three terminal tools install from
             <a href="https://github.com/filipgutica/homebrew-tap"
-              >one Homebrew tap</a
-            >.
+              >Homebrew tap</a
+            >
           </p>
         </header>
         <ul class="rows narrow">
@@ -412,8 +395,7 @@ onUnmounted(() => {
               ><code>annoterm</code></a
             >
             <p>
-              Review Markdown in the terminal and send your comments to a coding
-              agent as precise feedback.
+              Markdown review and agent feedback.
             </p>
           </li>
           <li class="row">
@@ -421,8 +403,7 @@ onUnmounted(() => {
               ><code>devps</code></a
             >
             <p>
-              Manage local dev servers: see what started each one, jump back to
-              it, or stop it.
+              Local dev server management.
             </p>
           </li>
           <li class="row">
@@ -430,8 +411,7 @@ onUnmounted(() => {
               ><code>Workbench</code></a
             >
             <p>
-              Plan across repositories, organize tickets, and start agent
-              threads in worktrees.
+              Tickets and agent threads across repositories.
             </p>
           </li>
         </ul>

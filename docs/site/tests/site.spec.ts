@@ -115,7 +115,7 @@ for (const width of [320, 390, 768, 801, 1280]) {
     const header = page.locator('.page-header');
     await expect(header.getByRole('link', { name: 'wtree home' })).toBeVisible();
     const heading = page.getByRole('heading', { level: 1 });
-    await expect(heading).toHaveText('Which worktrees are still in use, and which can go.');
+    await expect(heading).toHaveText('List and clean up Git worktrees.');
     const headerBox = await header.boundingBox();
     const headingBox = await heading.boundingBox();
     const introGap = (headingBox?.y ?? Infinity) - (headerBox?.y ?? 0) - (headerBox?.height ?? 0);
