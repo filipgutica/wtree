@@ -100,10 +100,11 @@ onUnmounted(() => {
             is removed.
           </p>
           <div id="install" class="install-command">
+            <p class="hint">Install with Homebrew</p>
             <UiCodeBlock
               code="brew install filipgutica/tap/wtree"
               language="bash"
-              title="Install with Homebrew"
+              variant="compact"
               :copyable="enhanced"
               :wrap="true"
             />
