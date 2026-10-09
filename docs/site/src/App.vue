@@ -1,14 +1,11 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, useTemplateRef } from 'vue';
+import { nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { UiButton, UiCodeBlock, UiDialog, UiTabs } from '@filipgutica/ui';
+import { UiSiteHeader } from "@filipgutica/ui/site";
 import SiteNavigation from './components/SiteNavigation.vue';
 import CaptureFigure from './components/CaptureFigure.vue';
 import CapturePreview from './components/CapturePreview.vue';
 import { captures, type Capture } from './captures';
-import { useScrollReveal } from './composables/useScrollReveal';
-
-const main = useTemplateRef<HTMLElement>('main');
-useScrollReveal(main);
 
 const enhanced = ref(false);
 const activeCapture = ref('browse');
@@ -79,16 +76,17 @@ onUnmounted(() => {
 <template>
   <a class="skip" href="#main">Skip to content</a>
   <div class="page" :data-enhanced="enhanced">
+    <UiSiteHeader
+      class="page-header"
+      project="wtree"
+      :links="[
+        { label: 'Guide', href: 'https://github.com/filipgutica/wtree/blob/main/README.md' },
+        { label: 'GitHub', href: 'https://github.com/filipgutica/wtree' },
+        { label: 'Releases', href: 'https://github.com/filipgutica/wtree/releases' },
+      ]"
+    />
     <SiteNavigation />
-    <header class="page-header">
-      <a class="page-brand" href="/wtree/" aria-label="wtree home">wtree</a>
-      <nav aria-label="Main navigation">
-        <a href="https://github.com/filipgutica/wtree/blob/main/README.md">Guide</a>
-        <a href="https://github.com/filipgutica/wtree">GitHub</a>
-        <a href="https://github.com/filipgutica/wtree/releases">Releases</a>
-      </nav>
-    </header>
-    <main id="main" ref="main">
+    <main id="main">
       <div>
         <section class="hero" aria-labelledby="title">
           <h1 id="title" class="tagline">
@@ -380,46 +378,11 @@ onUnmounted(() => {
           </nav>
         </div>
       </section>
-      <section class="split" aria-labelledby="family-title">
-        <header>
-          <h2 id="family-title">Also from Filip</h2>
-          <p>
-            <a href="https://github.com/filipgutica/homebrew-tap"
-              >Homebrew tap</a
-            >
-          </p>
-        </header>
-        <ul class="rows narrow">
-          <li class="row">
-            <a href="https://filipgutica.github.io/annoterm/"
-              ><code>annoterm</code></a
-            >
-            <p>
-              Markdown review and agent feedback.
-            </p>
-          </li>
-          <li class="row">
-            <a href="https://filipgutica.github.io/devps/"
-              ><code>devps</code></a
-            >
-            <p>
-              Local dev server management.
-            </p>
-          </li>
-          <li class="row">
-            <a href="https://filipgutica.github.io/t3code/"
-              ><code>Workbench</code></a
-            >
-            <p>
-              Tickets and agent threads across repositories.
-            </p>
-          </li>
-        </ul>
-      </section>
     </main>
     <footer>
       <a href="https://github.com/filipgutica">Built by Filip Gutica</a>
       <nav aria-label="Project links">
+        <a href="https://github.com/filipgutica/homebrew-tap">Homebrew tap</a>
         <a href="https://github.com/filipgutica/wtree/issues"
           >Report an issue</a
         >

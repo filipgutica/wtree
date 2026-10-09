@@ -2,13 +2,11 @@
 import { nextTick, onMounted, onUnmounted, ref, useTemplateRef } from 'vue';
 import { UiButton, UiDrawer, useActiveSection } from '@filipgutica/ui';
 import NavigationLinks from './NavigationLinks.vue';
-import { useTheme } from '../composables/useTheme';
 
 const enhanced = ref(false);
 const mobile = ref(false);
 const open = ref(false);
 const header = useTemplateRef<HTMLElement>('header');
-const { choice, choose } = useTheme();
 const activeId = useActiveSection({
   targetIds: [
     'install',
@@ -16,7 +14,6 @@ const activeId = useActiveSection({
     'keys-title',
     'shell-title',
     'limits-title',
-    'family-title',
   ],
 });
 let media: MediaQueryList | undefined;
@@ -44,7 +41,7 @@ const syncBreakpoint = () => {
   } else if (leavingFocusedTrigger) {
     void nextTick(() =>
       header.value
-        ?.querySelector<HTMLElement>('.family a')
+        ?.querySelector<HTMLElement>('.section-nav a')
         ?.focus({ preventScroll: true }),
     );
   }
@@ -75,7 +72,7 @@ const closeAutoFocus = (event: Event) => {
     event.preventDefault();
     void nextTick(() =>
       header.value
-        ?.querySelector<HTMLElement>('.family a')
+        ?.querySelector<HTMLElement>('.section-nav a')
         ?.focus({ preventScroll: true }),
     );
   }
@@ -101,9 +98,6 @@ onUnmounted(() => media?.removeEventListener('change', syncBreakpoint));
       </summary>
       <NavigationLinks
         :active-id="activeId"
-        :theme="choice"
-        :enhanced="enhanced"
-        @theme="choose"
       />
     </details>
     <UiDrawer
@@ -119,9 +113,6 @@ onUnmounted(() => media?.removeEventListener('change', syncBreakpoint));
       >
       <NavigationLinks
         :active-id="activeId"
-        :theme="choice"
-        :enhanced="enhanced"
-        @theme="choose"
         @navigate="navigate"
       />
     </UiDrawer>
