@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/filipgutica/wtree/compare/v0.7.0...v0.8.0) (2026-10-10)
+
+
+### Features
+
+* **site:** adopt the shared Graphite Indigo design language ([#23](https://github.com/filipgutica/wtree/issues/23)) ([1f978ed](https://github.com/filipgutica/wtree/commit/1f978ed60271a50611ef009c8de7b5c3ca459f26))
+
 ## [0.7.0](https://github.com/filipgutica/wtree/compare/v0.6.0...v0.7.0) (2026-10-05)
 
 
