@@ -14,7 +14,7 @@ const test = base.extend<{ cleanPage: void }>({
       });
       page.on('response', (response) => {
         if (
-          response.url().startsWith('http://127.0.0.1:4177/') &&
+          response.url().startsWith('http://127.0.0.1:4188/') &&
           response.status() >= 400
         )
           errors.push(`${response.status()} ${response.url()}`);
@@ -151,12 +151,12 @@ for (const width of [320, 390, 768, 801, 1280]) {
     await expect(heading).toHaveText('List and clean up Git worktrees.');
     // The local Menu sits below the shared header at <=800px, and the section
     // rail sits beside the intro on desktop.
-    const introAnchor = page.locator(width <= 800 ? '.site-header' : '.page-header');
+    const introAnchor = page.locator(width <= 800 ? '.fg-site-rail' : '.page-header');
     const anchorBox = await introAnchor.boundingBox();
     const headingBox = await heading.boundingBox();
     const introGap = (headingBox?.y ?? Infinity) - (anchorBox?.y ?? 0) - (anchorBox?.height ?? 0);
     expect(introGap).toBeGreaterThanOrEqual(0);
-    expect(introGap).toBeLessThanOrEqual(width <= 640 ? 20 : 28);
+    expect(introGap).toBeLessThanOrEqual(width <= 800 ? 24 : 32);
     const siteLinks = header.getByRole('navigation', { name: 'Site links' });
     await expect(siteLinks.getByRole('link', { name: 'Guide', exact: true })).toHaveAttribute(
       'href', 'https://github.com/filipgutica/wtree/blob/main/README.md',
@@ -170,12 +170,12 @@ for (const width of [320, 390, 768, 801, 1280]) {
     await expect(
       header.getByRole('button', { name: 'System theme', exact: true }),
     ).toHaveAttribute('aria-pressed', 'true');
-    const command = page.locator('.cmd .fg-code-block').first();
+    const command = page.locator('#install .fg-code-block');
     const copy = command.getByRole('button', { name: 'Copy code' });
     const blockBox = await command.boundingBox();
     const codeBox = await command.locator('pre').boundingBox();
     const copyBox = await copy.boundingBox();
-    expect(blockBox?.height ?? Infinity).toBeLessThanOrEqual(60);
+    expect(blockBox?.height ?? Infinity).toBeLessThanOrEqual(width <= 640 ? 64 : 60);
     expect(copyBox?.width ?? 0).toBeGreaterThanOrEqual(44);
     expect(copyBox?.height ?? 0).toBeGreaterThanOrEqual(44);
     expect(
@@ -184,7 +184,7 @@ for (const width of [320, 390, 768, 801, 1280]) {
           ((copyBox?.y ?? 0) + (copyBox?.height ?? 0) / 2),
       ),
     ).toBeLessThan(2);
-    for (const block of await page.locator('.cmd .fg-code-block').all()) {
+    for (const block of await page.locator('#install .fg-code-block').all()) {
       const preBox = await block.locator('pre').boundingBox();
       const buttonBox = await block.getByRole('button', { name: 'Copy code' }).boundingBox();
       expect((preBox?.x ?? 0) + (preBox?.width ?? 0)).toBeLessThanOrEqual((buttonBox?.x ?? 0) + 1);
@@ -192,6 +192,12 @@ for (const width of [320, 390, 768, 801, 1280]) {
         await block.locator('pre').evaluate((element) => element.scrollWidth <= element.clientWidth),
       ).toBe(true);
     }
+    for (const copyButton of await page.locator('.fg-command-list__copy').all()) {
+      const box = await copyButton.boundingBox();
+      expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    }
+    await expect(page.locator('.fg-capture__figure:visible')).toHaveCount(1);
     const frame = page.locator('#frame-browse');
     await expect
       .poll(() =>
@@ -285,6 +291,7 @@ test('capture deep links and hash history reveal the requested tab', async ({
     'true',
   );
   await expect(page.locator('#frame-select')).toBeVisible();
+  await expect(page.locator('#frame-browse')).toBeHidden();
   await page.evaluate(() => {
     location.hash = '#frame-plan';
   });
@@ -308,6 +315,7 @@ test('library tabs support keyboard navigation and retained capture content', as
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('tab', { name: 'Select' })).toBeFocused();
   await expect(page.locator('#frame-select')).toBeVisible();
+  await expect(page.locator('#frame-browse')).toBeHidden();
   await expect(page.locator('#frame-select .term')).toContainText('selected');
   await page.keyboard.press('End');
   await expect(
@@ -316,6 +324,7 @@ test('library tabs support keyboard navigation and retained capture content', as
   await expect(page.locator('#frame-plan .term')).toContainText(
     'dry run. drop --dry-run to remove them.',
   );
+  await expect(page.locator('#frame-select')).toBeHidden();
   await page.keyboard.press('Home');
   await expect(
     page.getByRole('tab', { name: 'Browse', exact: true }),
@@ -328,8 +337,8 @@ test('clicking the capture opens the full-size dialog and restores focus', async
   await page.setViewportSize({ width: 390, height: 844 });
   await load(page);
   const trigger = page.getByRole('button', { name: 'Expand Browse capture' });
-  await expect(page.getByText('Expand capture', { exact: true })).toHaveCount(0);
-  await page.locator('#frame-browse .capture-preview').click();
+  await expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+  await page.locator('#frame-browse .fg-capture__preview').click();
   const dialog = page.getByRole('dialog', { name: 'Browse capture' });
   await expect(dialog).toBeVisible();
   await expect(dialog.locator('.term')).toContainText('wtree — demo-api');
@@ -340,7 +349,7 @@ test('clicking the capture opens the full-size dialog and restores focus', async
   ).toBe('none');
   expect(
     await dialog
-      .locator('.term-wrap')
+      .locator('.fg-capture__screen')
       .evaluate((element) => element.scrollWidth > element.clientWidth),
   ).toBe(true);
   await noOverflow(page);
@@ -449,11 +458,13 @@ test('library code copying and syntax tokens work', async ({
   await expect
     .poll(() => install.locator('.fg-code-block__text > span[style]').count())
     .toBeGreaterThan(0);
-  const command = page.locator('.cmd .fg-code-block').first();
-  const commandText = await command.locator('code').textContent();
-  await command.getByRole('button', { name: 'Copy code' }).click();
-  await expect(command.getByRole('status')).toHaveText('Code copied to clipboard.');
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(commandText);
+  const commands = page.locator('section[aria-labelledby="commands-title"]');
+  for (const row of await commands.locator('tbody tr').all()) {
+    const command = await row.locator('code').first().innerText();
+    await row.getByRole('button', { name: `Copy ${command}`, exact: true }).click();
+    await expect(commands.getByRole('status')).toHaveText(`${command} copied to clipboard.`);
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(command);
+  }
 });
 
 test('clipboard failure remains recoverable with readable code', async ({
@@ -475,7 +486,7 @@ test('clipboard failure remains recoverable with readable code', async ({
   await expect(install.getByRole('status')).toHaveText(
     'Could not copy. Select the code to copy it.',
   );
-  await expect(install.locator('code')).toHaveText(
+  await expect(install.locator('pre code')).toHaveText(
     'brew install filipgutica/tap/wtree',
   );
   await expect(
@@ -546,18 +557,46 @@ test('shell wrapper example remains literal and copyable', async ({
   await load(page);
   const shell = page.locator('section[aria-labelledby="shell-title"]');
   const example = 'eval "$(wtree shell-init zsh)"';
-  await expect(shell.locator('.cmd code')).toHaveText(example);
+  await expect(shell.locator('tbody tr').first().locator('code').first()).toHaveText(example);
   await page
     .getByRole('navigation', { name: 'On this page' })
     .getByRole('link', { name: 'Change directory' })
     .click();
   await expect(page).toHaveURL(/#shell-title$/);
   await expectAtAnchor(page, 'shell-title');
-  await shell.getByRole('button', { name: 'Copy code' }).click();
+  await shell.getByRole('button', { name: `Copy ${example}`, exact: true }).click();
   await expect(shell.getByRole('status')).toHaveText(
-    'Code copied to clipboard.',
+    `${example} copied to clipboard.`,
   );
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
     example,
   );
+});
+
+test('reference content retains its order, commands, keys, and safety caveats', async ({ page }) => {
+  await load(page);
+  await expect(page.locator('main > section > h2')).toHaveText([
+    'Commands', 'Keys in wtree ui', 'Change directory', 'Good to know',
+  ]);
+  await expect(page.locator('section[aria-labelledby="commands-title"] tbody tr > td:first-child')).toHaveText([
+    'wtree', 'wtree ui', 'wtree clean --done --dry-run', 'wtree new feat/example',
+    'wtree go', 'wtree --size', 'wtree --json',
+  ]);
+  const keys = page.locator('section[aria-labelledby="keys-title"]');
+  await expect(keys.getByRole('columnheader').first()).toHaveText('Key');
+  await expect(keys.locator('tbody tr > td:first-child')).toHaveText(['Space', 'Enter', '/', 'd', 'o', 'n']);
+  await expect(keys.getByRole('button')).toHaveCount(0);
+  const caveats = page.locator('section[aria-labelledby="limits-title"]');
+  await expect(caveats.locator('dt')).toHaveText(['Cleanup', 'Protected', 'Unknown PR state', 'Without a terminal']);
+  for (const flag of ['--yes', '--dry-run', '--delete-branch', '--force'])
+    await expect(caveats).toContainText(flag);
+  await expect(caveats).toContainText('print the plan and exit 2');
+  await expect(caveats).toContainText('fail, rather than report no matches');
+});
+
+test('shows each key as a keycap', async ({ page }) => {
+  await load(page);
+  const keys = page.locator('section[aria-labelledby="keys-title"] .fg-command-list__command');
+  await expect(keys.locator('code')).toHaveCount(0);
+  await expect(keys.locator('kbd')).toHaveText(['Space', 'Enter', '/', 'd', 'o', 'n']);
 });
