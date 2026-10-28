@@ -17,17 +17,15 @@ for (const width of [320, 390, 768, 801, 1280]) {
     await expect(
       page.getByRole('group', { name: 'Color theme' }),
     ).toHaveCount(0);
-    await expect(page.locator('.capture-open')).toHaveCount(0);
+    await expect(page.locator('.fg-capture__expand')).toHaveCount(0);
     await expect(
       page.getByRole('heading', { name: 'List and clean up Git worktrees.', level: 1 }),
     ).toBeVisible();
-    await expect(page.locator('#install code')).toHaveText(
+    await expect(page.locator('#install pre code')).toHaveText(
       'brew install filipgutica/tap/wtree',
     );
     await expect(page.getByRole('tab')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Copy code' })).toHaveCount(
-      0,
-    );
+    await expect(page.getByRole('button', { name: /^Copy / })).toHaveCount(0);
     for (const id of ['browse', 'select', 'review', 'list', 'plan'])
       await expect(page.locator(`#frame-${id} .term`)).toBeVisible();
     await expect(page.locator('#frame-plan')).toContainText(
@@ -48,7 +46,7 @@ for (const width of [320, 390, 768, 801, 1280]) {
     );
     await projectTrigger.click();
     await expect(projectMenu).toBeHidden();
-    if (width <= 800) await page.locator('.site-menu > summary').click();
+    if (width <= 800) await page.locator('.fg-site-rail__menu > summary').click();
     const sectionNav = page.getByRole('navigation', { name: 'On this page' });
     await expect(sectionNav).toBeVisible();
     await sectionNav
@@ -95,7 +93,7 @@ test('no-JavaScript readers follow the OS dark theme from the library palette', 
         .evaluate((element) => getComputedStyle(element).backgroundColor),
     )
     .not.toBe(lightBackground);
-  await expect(page.locator('#install code')).toHaveText(
+  await expect(page.locator('#install pre code')).toHaveText(
     'brew install filipgutica/tap/wtree',
   );
   await page.emulateMedia({ colorScheme: 'light' });
