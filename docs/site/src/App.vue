@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { UiAlert, UiBadge, UiCard, UiCodeBlock } from '@filipgutica/ui';
+import { UiBadge, UiCard, UiCodeBlock } from '@filipgutica/ui';
 import { UiCapture, UiCommandList, UiSiteHeader, UiSiteNav } from '@filipgutica/ui/site';
 import { captures } from './captures';
 
@@ -130,7 +130,9 @@ const shellCommands = [
       <section aria-labelledby="keys-title">
         <h2 id="keys-title">Keys in wtree ui</h2>
         <p class="section-intro"><kbd>?</kbd> shows all shortcuts.</p>
-        <UiCommandList :items="keys" :copyable="false" command-header="Key" />
+        <UiCommandList :items="keys" :copyable="false" command-header="Key">
+          <template #command="{ item }"><kbd>{{ item.command }}</kbd></template>
+        </UiCommandList>
       </section>
       <section aria-labelledby="shell-title">
         <h2 id="shell-title">Change directory</h2>
@@ -154,7 +156,7 @@ const shellCommands = [
           <dt>Protected</dt>
           <dd>Main and current worktrees are never removed. Dirty, unpushed, or locked worktrees require <code>--force</code>.</dd>
           <dt>Unknown PR state</dt>
-          <dd><UiAlert><p>Stops filtered cleanup. Missing, signed-out, or offline <code>gh</code> makes <code>wtree clean --done</code> fail, rather than report no matches.</p></UiAlert></dd>
+          <dd>Stops filtered cleanup. Missing, signed-out, or offline <code>gh</code> makes <code>wtree clean --done</code> fail, rather than report no matches.</dd>
           <dt>Without a terminal</dt>
           <dd><code>clean</code>, <code>rm</code>, and <code>prune</code> print the plan and exit 2 unless given <code>--dry-run</code> or <code>--yes</code>. <code>wtree ui</code> exits 2.</dd>
         </dl>

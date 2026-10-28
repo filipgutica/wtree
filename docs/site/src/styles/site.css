@@ -32,28 +32,29 @@
   --site-capture-bg: var(--t-bg);
   --site-nav-width: 11rem;
 }
-*, *::before, *::after { box-sizing: border-box; }
-[hidden] { display: none !important; }
-html { scroll-behavior: smooth; scroll-padding-top: var(--space-6); }
-body {
-  margin: 0;
-  background: var(--color-bg);
-  color: var(--color-text);
-  font: var(--text-md) / var(--leading) var(--font-ui);
-  -webkit-font-smoothing: antialiased;
-}
-h1, h2, h3, p, dl, dd { margin: 0; }
-h1, h2, h3 {
-  font-weight: var(--weight-semibold);
-  line-height: var(--leading-tight);
-  text-wrap: balance;
-}
-h1 { max-width: 22ch; font-size: var(--text-3xl); letter-spacing: var(--tracking-tight); }
-h2 { font-size: var(--text-xl); }
-p { max-width: var(--measure); text-wrap: pretty; }
-code, kbd, pre { font-family: var(--font-mono); }
-code { font-size: 0.93em; }
+/* Element defaults sit in the base layer so library component styles, such as the nav label, win. */
 @layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { scroll-behavior: smooth; scroll-padding-top: var(--space-6); }
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font: var(--text-md) / var(--leading) var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, p, dl, dd { margin: 0; }
+  h1, h2, h3 {
+    font-weight: var(--weight-semibold);
+    line-height: var(--leading-tight);
+    text-wrap: balance;
+  }
+  h1 { max-width: 22ch; font-size: var(--text-3xl); letter-spacing: var(--tracking-tight); }
+  h2 { font-size: var(--text-xl); }
+  p { max-width: var(--measure); text-wrap: pretty; }
+  code, kbd, pre { font-family: var(--font-mono); }
+  code { font-size: 0.93em; }
   a { color: var(--color-link); text-decoration: none; }
   a:hover, p a, dd a { text-decoration: underline; text-underline-offset: 0.18em; }
 }
@@ -108,6 +109,7 @@ section > * { min-width: 0; }
 .links, .page-footer, .page-footer nav { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); }
 .links, .page-footer { font-size: var(--text-sm); }
 .links a, .page-footer a { display: inline-flex; align-items: center; min-height: var(--control-lg); }
+.page-footer a { color: var(--color-muted); }
 .page-footer { justify-content: space-between; padding-block: var(--space-6) var(--space-8); border-top: 1px solid var(--color-border-subtle); }
 @media (max-width: 860px) {
   .legend-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

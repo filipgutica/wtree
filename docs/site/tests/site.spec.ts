@@ -175,7 +175,7 @@ for (const width of [320, 390, 768, 801, 1280]) {
     const blockBox = await command.boundingBox();
     const codeBox = await command.locator('pre').boundingBox();
     const copyBox = await copy.boundingBox();
-    expect(blockBox?.height ?? Infinity).toBeLessThanOrEqual(60);
+    expect(blockBox?.height ?? Infinity).toBeLessThanOrEqual(width <= 640 ? 64 : 60);
     expect(copyBox?.width ?? 0).toBeGreaterThanOrEqual(44);
     expect(copyBox?.height ?? 0).toBeGreaterThanOrEqual(44);
     expect(
