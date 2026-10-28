@@ -593,3 +593,10 @@ test('reference content retains its order, commands, keys, and safety caveats', 
   await expect(caveats).toContainText('print the plan and exit 2');
   await expect(caveats).toContainText('fail, rather than report no matches');
 });
+
+test('shows each key as a keycap', async ({ page }) => {
+  await load(page);
+  const keys = page.locator('section[aria-labelledby="keys-title"] .fg-command-list__command');
+  await expect(keys.locator('code')).toHaveCount(0);
+  await expect(keys.locator('kbd')).toHaveText(['Space', 'Enter', '/', 'd', 'o', 'n']);
+});
