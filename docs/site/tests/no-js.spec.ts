@@ -8,11 +8,10 @@ for (const width of [320, 390, 768, 801, 1280]) {
     await page.goto('/wtree/');
     const projectTrigger = page.getByLabel('Project: wtree', { exact: true });
     await expect(projectTrigger).toBeVisible();
-    await expect(
-      page
-        .getByRole('navigation', { name: 'Site links' })
-        .getByRole('link'),
-    ).toHaveText(['Guide', 'GitHub', 'Releases']);
+    const siteLinks = page.getByRole('navigation', { name: 'Site links' });
+    // Phones keep one header row; the footer repeats Releases.
+    if (width <= 640) await expect(siteLinks).toBeHidden();
+    else await expect(siteLinks.getByRole('link')).toHaveText(['GitHub', 'Releases']);
     // The appearance picker needs JavaScript and is not rendered without it.
     await expect(
       page.getByRole('group', { name: 'Color theme' }),
@@ -32,7 +31,7 @@ for (const width of [320, 390, 768, 801, 1280]) {
       'dry run. drop --dry-run to remove them.',
     );
     // The project menu is a native details element. Close it again so it does
-    // not cover the local Menu on narrow screens.
+    // not cover the local On this page toggle on narrow screens.
     const projectMenu = page.getByRole('navigation', { name: 'Projects' });
     await expect(projectMenu).toBeHidden();
     await projectTrigger.click();
