@@ -161,9 +161,9 @@ for (const width of [320, 390, 768, 801, 1280]) {
     if (width <= 640) {
       // Phones keep one header row; the source fact and footer still reach both destinations.
       await expect(siteLinks).toBeHidden();
-      await expect(page.locator('.fg-site-facts').getByRole('link', { name: 'filipgutica/wtree' })).toHaveAttribute(
-        'href', 'https://github.com/filipgutica/wtree',
-      );
+      const sourceLink = page.locator('.fg-site-facts').getByRole('link', { name: 'filipgutica/wtree' });
+      await expect(sourceLink).toHaveAttribute('href', 'https://github.com/filipgutica/wtree');
+      expect((await sourceLink.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
       await expect(page.locator('.fg-site-footer').getByRole('link', { name: 'Releases', exact: true })).toHaveAttribute(
         'href', 'https://github.com/filipgutica/wtree/releases',
       );

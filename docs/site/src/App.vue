@@ -84,7 +84,6 @@ const shellCommands = [
             <template #caption="{ item }">
               <p v-if="item.id === 'browse'">
                 Shortcuts sit above the table, with focused worktree details below it.
-                <code>[-]</code> marks a worktree that cannot be removed.
               </p>
               <p v-else-if="item.id === 'select'">
                 Space selects a removable row. The selection count stays above the
