@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { UiBadge, UiCard, UiCodeBlock } from '@filipgutica/ui';
+import { UiCard, UiCodeBlock } from '@filipgutica/ui';
 import { UiCapture, UiCommandList, UiSiteHeader, UiSiteNav } from '@filipgutica/ui/site';
 import { captures } from './captures';
 
 const enhanced = ref(false);
 onMounted(() => { enhanced.value = true; });
 
+const headerLinks = [
+  { label: 'GitHub', href: 'https://github.com/filipgutica/wtree' },
+  { label: 'Releases', href: 'https://github.com/filipgutica/wtree/releases' },
+];
 const sections = [{ items: [
   { label: 'Install', href: '#install' },
   { label: 'Commands', href: '#commands-title' },
@@ -39,15 +43,10 @@ const shellCommands = [
 
 <template>
   <a class="fg-site-skip" href="#main">Skip to content</a>
-  <div class="page" :data-enhanced="enhanced">
+  <div class="fg-site-docs" :data-enhanced="enhanced">
     <UiSiteHeader
-      class="page-header"
       project="wtree"
-      :links="[
-        { label: 'Guide', href: 'https://github.com/filipgutica/wtree/blob/main/README.md' },
-        { label: 'GitHub', href: 'https://github.com/filipgutica/wtree' },
-        { label: 'Releases', href: 'https://github.com/filipgutica/wtree/releases' },
-      ]"
+      :links="headerLinks"
     />
     <UiSiteNav label="On this page" :groups="sections" />
     <main id="main">
@@ -58,7 +57,7 @@ const shellCommands = [
           Review cleanup before removal.
         </p>
         <div id="install" class="install">
-          <p class="hint">Install with Homebrew</p>
+          <p class="fg-site-meta">Install with Homebrew</p>
           <UiCodeBlock
             code="brew install filipgutica/tap/wtree"
             language="bash"
@@ -67,7 +66,7 @@ const shellCommands = [
             :wrap="true"
           />
           <div class="meta">
-            <p class="hint">
+            <p class="fg-site-meta">
               Homebrew installs Node.js. Optional: <code>gh</code> for PR state,
               <code>fzf</code> for <code>wtree go</code>.
               <a href="https://brew.sh/">Install Homebrew</a> if needed.
@@ -80,7 +79,7 @@ const shellCommands = [
           </div>
         </div>
         <div class="capture" role="group" aria-label="wtree in use">
-          <p class="hint">Current wtree UI; demo repository and sample pull requests.</p>
+          <p class="fg-site-meta">Current wtree UI; demo repository and sample pull requests.</p>
           <UiCapture :items="captures" label="Steps">
             <template #caption="{ item }">
               <p v-if="item.id === 'browse'">
@@ -107,13 +106,13 @@ const shellCommands = [
           </UiCapture>
         </div>
         <UiCard title="On screen" title-tag="h3" class="legend">
-          <dl class="legend-grid">
-            <div><dt><UiBadge>[-]</UiBadge></dt><dd>Blocked; status explains why.</dd></div>
-            <div><dt><UiBadge>M @</UiBadge></dt><dd>Main / current worktree.</dd></div>
-            <div><dt><UiBadge>* ↑</UiBadge></dt><dd>Uncommitted changes / unpushed commits.</dd></div>
-            <div><dt><UiBadge>✓</UiBadge></dt><dd>In default branch; misses squash/rebase merges. Trust PR state.</dd></div>
-            <div><dt><UiBadge>PR</UiBadge></dt><dd>open, merged, closed; - none, ? unavailable.</dd></div>
-            <div><dt><UiBadge>·</UiBadge></dt><dd>Default path: <code>~/.wtree/&lt;repo&gt;/&lt;branch&gt;</code>.</dd></div>
+          <dl class="fg-site-legend">
+            <div><dt>[-]</dt><dd>Blocked; status explains why.</dd></div>
+            <div><dt>M @</dt><dd>Main / current worktree.</dd></div>
+            <div><dt>* ↑</dt><dd>Uncommitted changes / unpushed commits.</dd></div>
+            <div><dt>✓</dt><dd>In default branch; misses squash/rebase merges. Trust PR state.</dd></div>
+            <div><dt>PR</dt><dd>open, merged, closed; - none, ? unavailable.</dd></div>
+            <div><dt>·</dt><dd>Default path: <code>~/.wtree/&lt;repo&gt;/&lt;branch&gt;</code>.</dd></div>
           </dl>
         </UiCard>
       </section>
@@ -166,7 +165,7 @@ const shellCommands = [
         </nav>
       </section>
     </main>
-    <footer class="page-footer">
+    <footer class="fg-site-footer">
       <a href="https://github.com/filipgutica">Built by Filip Gutica</a>
       <nav aria-label="Project links">
         <a href="https://github.com/filipgutica/homebrew-tap">Homebrew tap</a>
