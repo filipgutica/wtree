@@ -29,6 +29,7 @@ const commands = [
 ];
 const keys = [
   { command: 'Space', description: 'Select the worktree. A blocked worktree stays unselected and says why.' },
+  { command: 'f', description: 'Select a worktree that is blocked only by uncommitted changes, unpushed commits, or a lock.' },
   { command: 'Enter', description: 'Show the full branch name and path.' },
   { command: '/', description: 'Filter by branch or path.' },
   { command: 'd', description: 'Review the selected worktrees, then confirm to remove them.' },
