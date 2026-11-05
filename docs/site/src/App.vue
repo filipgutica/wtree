@@ -19,21 +19,21 @@ const sections = [{ items: [
   { label: 'Good to know', href: '#limits-title' },
 ] }];
 const commands = [
-  { command: 'wtree', description: 'List: main first, then oldest.' },
-  { command: 'wtree ui', description: 'Browse, filter, select, and remove worktrees.' },
-  { command: 'wtree clean --done --dry-run', description: 'Preview worktree removal for merged or closed PRs.' },
-  { command: 'wtree new feat/example', description: "Create a branch's worktree or print its existing path." },
-  { command: 'wtree go', description: 'Pick a worktree or branch; print its path.' },
+  { command: 'wtree', description: 'List every worktree, with main first and the oldest next.' },
+  { command: 'wtree ui', description: 'Browse, filter, and select worktrees, then remove them.' },
+  { command: 'wtree clean --done --dry-run', description: 'Show which worktrees with merged or closed pull requests would be removed.' },
+  { command: 'wtree new feat/example', description: 'Create a worktree for the branch, or print its path if it already has one.' },
+  { command: 'wtree go', description: 'Pick a worktree or branch and print its path. A branch without a worktree gets one.' },
   { command: 'wtree --size' },
-  { command: 'wtree --json', description: 'List as JSON.' },
+  { command: 'wtree --json', description: 'Print the list as JSON.' },
 ];
 const keys = [
-  { command: 'Space', description: 'Select; blocked worktrees explain why they refuse.' },
-  { command: 'Enter', description: 'Full branch and path.' },
+  { command: 'Space', description: 'Select the worktree. A blocked worktree stays unselected and says why.' },
+  { command: 'Enter', description: 'Show the full branch name and path.' },
   { command: '/', description: 'Filter by branch or path.' },
-  { command: 'd', description: 'Review selected removals, then confirm.' },
-  { command: 'o', description: "Exit; print the focused worktree's path." },
-  { command: 'n', description: "Create a branch's worktree." },
+  { command: 'd', description: 'Review the selected worktrees, then confirm to remove them.' },
+  { command: 'o', description: "Quit and print the focused worktree's path." },
+  { command: 'n', description: 'Create a worktree for a branch.' },
 ];
 const shellCommands = [
   { command: 'eval "$(wtree shell-init zsh)"' },
@@ -53,8 +53,10 @@ const shellCommands = [
       <section class="intro" aria-labelledby="title">
         <h1 id="title">List and clean up Git worktrees.</h1>
         <p class="lede">
-          Adds age and pull request state to <code>git worktree list</code>.
-          Review cleanup before removal.
+          wtree is <code>git worktree list</code> plus each worktree's age and pull
+          request state. Use it to see which worktrees hold finished work, create
+          new ones, and remove old ones after you check a cleanup plan, which lists
+          exactly what wtree will remove.
         </p>
         <div id="install" class="install">
           <p class="fg-site-meta">Install with Homebrew</p>
@@ -67,9 +69,10 @@ const shellCommands = [
           />
           <div class="meta">
             <p class="fg-site-meta">
-              Homebrew installs Node.js. Optional: <code>gh</code> for PR state,
-              <code>fzf</code> for <code>wtree go</code>.
-              <a href="https://brew.sh/">Install Homebrew</a> if needed.
+              Homebrew also installs Node.js. wtree gets pull request state from
+              the GitHub CLI, <code>gh</code>, and <code>wtree go</code> uses
+              <code>fzf</code> for its picker if you have it.
+              <a href="https://brew.sh/">Install Homebrew</a> if you don't have it.
             </p>
             <dl class="fg-site-facts">
               <div><dt>Runs on</dt><dd>macOS and Linux</dd></div>
@@ -79,69 +82,75 @@ const shellCommands = [
           </div>
         </div>
         <div class="capture" role="group" aria-label="wtree in use">
-          <p class="fg-site-meta">Current wtree UI; demo repository and sample pull requests.</p>
+          <p class="fg-site-meta">These captures show the current wtree UI with a demo repository and sample pull requests.</p>
           <UiCapture :items="captures" label="Steps">
             <template #caption="{ item }">
               <p v-if="item.id === 'browse'">
-                Shortcuts sit above the table, with focused worktree details below it.
+                <code>wtree ui</code> lists your worktrees in a table. Shortcuts sit
+                above it, and details of the focused worktree sit below it.
               </p>
               <p v-else-if="item.id === 'select'">
-                Space selects a removable row. The selection count stays above the
-                table, alongside <kbd>d</kbd> to review it.
+                Press <kbd>Space</kbd> to select a worktree for removal. The selection
+                count stays above the table, next to <kbd>d</kbd>, which opens the review.
               </p>
               <p v-else-if="item.id === 'review'">
-                The plan lists what will go. Nothing is removed until you press
-                <kbd>y</kbd>. <kbd>b</kbd> also deletes the branches.
+                The review lists each worktree that will go. Press <kbd>y</kbd> to
+                remove them. <kbd>b</kbd> turns branch deletion on or off.
               </p>
               <p v-else-if="item.id === 'list'">
-                The same data as a plain table. It ends with a hint when there is
-                something to clean up.
+                Plain <code>wtree</code> prints the same rows as a table. When there is
+                something to clean up, it ends with a hint that names the command to run.
               </p>
               <p v-else-if="item.id === 'plan'">
-                Prints the cleanup plan for merged and closed pull requests. A dry run
-                removes nothing.
+                A dry run prints the cleanup plan for worktrees whose pull requests are
+                merged or closed, and removes nothing.
               </p>
             </template>
           </UiCapture>
         </div>
         <UiCard title="On screen" title-tag="h3" class="legend">
           <dl class="fg-site-legend">
-            <div><dt>[-]</dt><dd>Blocked; status explains why.</dd></div>
-            <div><dt>M @</dt><dd>Main / current worktree.</dd></div>
-            <div><dt>* ↑</dt><dd>Uncommitted changes / unpushed commits.</dd></div>
-            <div><dt>✓</dt><dd>In default branch; misses squash/rebase merges. Trust PR state.</dd></div>
-            <div><dt>PR</dt><dd>open, merged, closed; - none, ? unavailable.</dd></div>
-            <div><dt>·</dt><dd>Default path: <code>~/.wtree/&lt;repo&gt;/&lt;branch&gt;</code>.</dd></div>
+            <div><dt>[-]</dt><dd>Blocked, so wtree won't remove it. The status line says why.</dd></div>
+            <div><dt>M @</dt><dd>The main worktree, and the one you are in.</dd></div>
+            <div><dt>* ↑</dt><dd>Uncommitted changes, and unpushed commits.</dd></div>
+            <div><dt>✓</dt><dd>The branch's commits are in the default branch. Squash and rebase merges rewrite those commits, so ✓ misses them. Trust the PR column instead.</dd></div>
+            <div><dt>PR</dt><dd>The pull request is open, merged, or closed. <code>-</code> means there is none, and <code>?</code> means wtree couldn't get its state.</dd></div>
+            <div><dt>·</dt><dd>The worktree is in its default folder, <code>~/.wtree/&lt;repo&gt;/&lt;branch&gt;</code>.</dd></div>
           </dl>
         </UiCard>
       </section>
       <section aria-labelledby="commands-title">
         <h2 id="commands-title">Commands</h2>
-        <p class="section-intro">Uses the current repository.</p>
+        <p class="section-intro">Each command works on the Git repository you run it in.</p>
         <UiCommandList :items="commands">
           <template #description="{ item }">
-            <template v-if="item.command === 'wtree --size'">Measure disk usage with <code>du</code>; off by default.</template>
+            <template v-if="item.command === 'wtree --size'">Also measure each worktree's disk usage with <code>du</code>. It is off by default because it is slow on large worktrees.</template>
             <template v-else>{{ item.description }}</template>
           </template>
         </UiCommandList>
       </section>
       <section aria-labelledby="keys-title">
         <h2 id="keys-title">Keys in wtree ui</h2>
-        <p class="section-intro"><kbd>?</kbd> shows all shortcuts.</p>
+        <p class="section-intro">Press <kbd>?</kbd> in <code>wtree ui</code> to see every shortcut.</p>
         <UiCommandList :items="keys" :copyable="false" command-header="Key">
           <template #command="{ item }"><kbd>{{ item.command }}</kbd></template>
         </UiCommandList>
       </section>
       <section aria-labelledby="shell-title">
         <h2 id="shell-title">Change directory</h2>
-        <p class="section-intro">The <code>wt</code> wrapper changes your shell's directory.</p>
+        <p class="section-intro">
+          A program can't change your shell's directory, so wtree prints paths instead.
+          The <code>wt</code> shell function runs wtree and changes into the path it prints.
+        </p>
         <UiCommandList :items="shellCommands">
           <template #description="{ item }">
             <template v-if="item.command === 'wt go'">
-              Pick and change directory. Also: <code>wt new</code>, <code>wt path</code>, <code>wt ui</code>.
+              Pick a worktree and change into it. <code>wt new</code>, <code>wt path</code>,
+              and <code>wt ui</code> change directory too.
             </template>
             <template v-else>
-              Add to <code>~/.zshrc</code>; use <code>bash</code> for <code>~/.bashrc</code>.
+              Add this line to <code>~/.zshrc</code>. For bash, write <code>bash</code>
+              and add it to <code>~/.bashrc</code>.
             </template>
           </template>
         </UiCommandList>
@@ -150,13 +159,13 @@ const shellCommands = [
         <h2 id="limits-title">Good to know</h2>
         <dl class="fg-site-definitions">
           <dt>Cleanup</dt>
-          <dd>Review the plan, then confirm. <code>--yes</code> skips confirmation; <code>--dry-run</code> never removes. Branch deletion requires <code>--delete-branch</code>.</dd>
+          <dd>wtree removes nothing until you confirm the plan. <code>--yes</code> skips the question, and <code>--dry-run</code> only prints the plan. Branches stay unless you pass <code>--delete-branch</code>.</dd>
           <dt>Protected</dt>
-          <dd>Main and current worktrees are never removed. Dirty, unpushed, or locked worktrees require <code>--force</code>.</dd>
+          <dd>wtree never removes the main worktree or the one you are in. Worktrees with uncommitted changes, unpushed commits, or a lock need <code>--force</code>.</dd>
           <dt>Unknown PR state</dt>
-          <dd>Stops filtered cleanup. Missing, signed-out, or offline <code>gh</code> makes <code>wtree clean --done</code> fail, rather than report no matches.</dd>
+          <dd>If <code>gh</code> is missing, signed out, or offline, wtree can't get pull request state. A cleanup that filters on it, such as <code>wtree clean --done</code>, then stops with an error instead of reporting no matches.</dd>
           <dt>Without a terminal</dt>
-          <dd><code>clean</code>, <code>rm</code>, and <code>prune</code> print the plan and exit 2 unless given <code>--dry-run</code> or <code>--yes</code>. <code>wtree ui</code> exits 2.</dd>
+          <dd>In a script or pipe, no one can answer the prompt. <code>clean</code>, <code>rm</code>, and <code>prune</code> then print the plan and exit 2 unless you pass <code>--dry-run</code> or <code>--yes</code>. <code>wtree ui</code> exits 2 instead of starting.</dd>
         </dl>
         <nav class="links" aria-label="Documentation">
           <a href="https://github.com/filipgutica/wtree#readme">Full reference</a>

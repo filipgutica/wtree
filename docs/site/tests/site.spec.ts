@@ -600,7 +600,7 @@ test('reference content retains its order, commands, keys, and safety caveats', 
   for (const flag of ['--yes', '--dry-run', '--delete-branch', '--force'])
     await expect(caveats).toContainText(flag);
   await expect(caveats).toContainText('print the plan and exit 2');
-  await expect(caveats).toContainText('fail, rather than report no matches');
+  await expect(caveats).toContainText('stops with an error instead of reporting no matches');
 });
 
 test('shows each key as a keycap', async ({ page }) => {
