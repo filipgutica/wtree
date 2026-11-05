@@ -9,8 +9,6 @@
 /* The .fg-site-docs shell owns the frame, element base, kbd, legend, footer, and
  * terminal palette. These rules cover only this page's own layout. */
 @layer base {
-  /* Tab panels use the hidden attribute; keep it ahead of their display rules. */
-  [hidden] { display: none !important; }
   @media (prefers-reduced-motion: no-preference) {
     html { scroll-behavior: smooth; }
   }
@@ -26,8 +24,3 @@ main > section > * { min-width: 0; }
 .links { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); font-size: var(--text-sm); }
 .links a { display: inline-flex; align-items: center; min-height: var(--control-lg); text-decoration: none; }
 .links a:hover { text-decoration: underline; }
-/* Phones hide the header GitHub link, so the Source fact becomes its touch target. */
-@media (max-width: 640px) {
-  .fg-site-facts > div { align-items: center; }
-  .fg-site-facts a { display: inline-flex; align-items: center; min-height: var(--control-lg); }
-}
