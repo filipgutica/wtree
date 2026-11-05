@@ -593,19 +593,19 @@ test('reference content retains its order, commands, keys, and safety caveats', 
   ]);
   const keys = page.locator('section[aria-labelledby="keys-title"]');
   await expect(keys.getByRole('columnheader').first()).toHaveText('Key');
-  await expect(keys.locator('tbody tr > td:first-child')).toHaveText(['Space', 'Enter', '/', 'd', 'o', 'n']);
+  await expect(keys.locator('tbody tr > td:first-child')).toHaveText(['Space', 'f', 'Enter', '/', 'd', 'o', 'n']);
   await expect(keys.getByRole('button')).toHaveCount(0);
   const caveats = page.locator('section[aria-labelledby="limits-title"]');
   await expect(caveats.locator('dt')).toHaveText(['Cleanup', 'Protected', 'Unknown PR state', 'Without a terminal']);
   for (const flag of ['--yes', '--dry-run', '--delete-branch', '--force'])
     await expect(caveats).toContainText(flag);
   await expect(caveats).toContainText('print the plan and exit 2');
-  await expect(caveats).toContainText('fail, rather than report no matches');
+  await expect(caveats).toContainText('stops with an error instead of reporting no matches');
 });
 
 test('shows each key as a keycap', async ({ page }) => {
   await load(page);
   const keys = page.locator('section[aria-labelledby="keys-title"] .fg-command-list__command');
   await expect(keys.locator('code')).toHaveCount(0);
-  await expect(keys.locator('kbd')).toHaveText(['Space', 'Enter', '/', 'd', 'o', 'n']);
+  await expect(keys.locator('kbd')).toHaveText(['Space', 'f', 'Enter', '/', 'd', 'o', 'n']);
 });
