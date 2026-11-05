@@ -53,10 +53,10 @@ const shellCommands = [
       <section class="intro" aria-labelledby="title">
         <h1 id="title">List and clean up Git worktrees.</h1>
         <p class="lede">
-          wtree is <code>git worktree list</code> plus each worktree's age and pull
-          request state. Use it to see which worktrees hold finished work, create
-          new ones, and remove old ones after you check a cleanup plan, which lists
-          exactly what wtree will remove.
+          wtree is a terminal tool for Git worktrees, the extra folders where you
+          check out other branches of the same repository. It shows each worktree's
+          age and pull request state so you can find finished work and clean it up,
+          and it creates new worktrees too.
         </p>
         <div id="install" class="install">
           <p class="fg-site-meta">Install with Homebrew</p>
@@ -82,7 +82,7 @@ const shellCommands = [
           </div>
         </div>
         <div class="capture" role="group" aria-label="wtree in use">
-          <p class="fg-site-meta">These captures show the current wtree UI with a demo repository and sample pull requests.</p>
+          <p class="fg-site-meta">To start, run <code>wtree ui</code> in your Git repository. The captures below use a demo repository and sample pull requests.</p>
           <UiCapture :items="captures" label="Steps">
             <template #caption="{ item }">
               <p v-if="item.id === 'browse'">
@@ -110,9 +110,9 @@ const shellCommands = [
         </div>
         <UiCard title="On screen" title-tag="h3" class="legend">
           <dl class="fg-site-legend">
-            <div><dt>[-]</dt><dd>Blocked, so wtree won't remove it. The status line says why.</dd></div>
-            <div><dt>M @</dt><dd>The main worktree, and the one you are in.</dd></div>
-            <div><dt>* ↑</dt><dd>Uncommitted changes, and unpushed commits.</dd></div>
+            <div><dt>[-]</dt><dd>Blocked, so <kbd>Space</kbd> won't select it. The status line says why, and whether <kbd>f</kbd> can force it.</dd></div>
+            <div><dt>M @</dt><dd><code>M</code> marks the main worktree, and <code>@</code> the one you are in.</dd></div>
+            <div><dt>* ↑</dt><dd><code>*</code> marks uncommitted changes, and <code>↑</code> unpushed commits.</dd></div>
             <div><dt>✓</dt><dd>The branch's commits are in the default branch. Squash and rebase merges rewrite those commits, so ✓ misses them. Trust the PR column instead.</dd></div>
             <div><dt>PR</dt><dd>The pull request is open, merged, or closed. <code>-</code> means there is none, and <code>?</code> means wtree couldn't get its state.</dd></div>
             <div><dt>·</dt><dd>The worktree is in its default folder, <code>~/.wtree/&lt;repo&gt;/&lt;branch&gt;</code>.</dd></div>
@@ -159,7 +159,7 @@ const shellCommands = [
         <h2 id="limits-title">Good to know</h2>
         <dl class="fg-site-definitions">
           <dt>Cleanup</dt>
-          <dd>wtree removes nothing until you confirm the plan. <code>--yes</code> skips the question, and <code>--dry-run</code> only prints the plan. Branches stay unless you pass <code>--delete-branch</code>.</dd>
+          <dd>wtree removes nothing until you confirm the plan. <code>--yes</code> skips the question, and <code>--dry-run</code> only prints the plan. Branches stay unless you pass <code>--delete-branch</code> or press <kbd>b</kbd> in the review.</dd>
           <dt>Protected</dt>
           <dd>wtree never removes the main worktree or the one you are in. Worktrees with uncommitted changes, unpushed commits, or a lock need <code>--force</code>.</dd>
           <dt>Unknown PR state</dt>
