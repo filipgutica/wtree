@@ -160,13 +160,13 @@ const shellCommands = [
         <h2 id="limits-title">Good to know</h2>
         <dl class="fg-site-definitions">
           <dt>Cleanup</dt>
-          <dd>wtree removes nothing until you confirm the plan. <code>--yes</code> skips the question, and <code>--dry-run</code> only prints the plan. Branches stay unless you pass <code>--delete-branch</code> or press <kbd>b</kbd> in the review.</dd>
+          <dd>wtree removes nothing until you confirm the plan. <code>--yes</code> skips the question, and <code>--dry-run</code> only prints the plan. Branches stay unless you pass <code>--delete-branch</code> or press <kbd>b</kbd> in <code>wtree ui</code>.</dd>
           <dt>Protected</dt>
           <dd>wtree never removes the main worktree or the one you are in. Worktrees with uncommitted changes, unpushed commits, or a lock need <code>--force</code>.</dd>
           <dt>Unknown PR state</dt>
-          <dd>If <code>gh</code> is missing, signed out, or offline, wtree can't get pull request state. A cleanup that filters on it, such as <code>wtree clean --done</code>, then stops with an error instead of reporting no matches.</dd>
+          <dd>wtree keeps recent pull request state in a short-lived cache. If the cache is stale and <code>gh</code> is missing, signed out, or offline, wtree has no pull request state. A cleanup that filters on it, such as <code>wtree clean --done</code>, then stops with an error instead of reporting no matches.</dd>
           <dt>Without a terminal</dt>
-          <dd>In a script or pipe, no one can answer the prompt. <code>clean</code>, <code>rm</code>, and <code>prune</code> then print the plan and exit 2 unless you pass <code>--dry-run</code> or <code>--yes</code>. <code>wtree ui</code> exits 2 instead of starting.</dd>
+          <dd>In a script or pipe, no one can answer the prompt. <code>clean</code>, <code>rm</code>, and <code>prune</code> then print the plan and exit 2 when there is something to remove, unless you pass <code>--dry-run</code> or <code>--yes</code>. <code>wtree ui</code> exits 2 instead of starting.</dd>
         </dl>
         <nav class="links" aria-label="Documentation">
           <a href="https://github.com/filipgutica/wtree#readme">Full reference</a>
