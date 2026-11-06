@@ -74,6 +74,7 @@ test('no-JavaScript readers follow the OS dark theme from the library palette', 
 }) => {
   await page.emulateMedia({ colorScheme: 'light' });
   await page.goto('/wtree/');
+  await expect(page.locator('html')).toHaveCSS('--color-project', '#2c7a2f');
   const lightBackground = await page
     .locator('body')
     .evaluate((element) => getComputedStyle(element).backgroundColor);
@@ -85,6 +86,8 @@ test('no-JavaScript readers follow the OS dark theme from the library palette', 
         .evaluate((element) => getComputedStyle(element).colorScheme),
     )
     .toBe('dark');
+  await expect(page.locator('html')).toHaveCSS('--color-project', '#7fd083');
+  await expect(page.locator('html')).toHaveCSS('--color-project-dark', '#7fd083');
   await expect
     .poll(() =>
       page
@@ -103,4 +106,5 @@ test('no-JavaScript readers follow the OS dark theme from the library palette', 
         .evaluate((element) => getComputedStyle(element).backgroundColor),
     )
     .toBe(lightBackground);
+  await expect(page.locator('html')).toHaveCSS('--color-project', '#2c7a2f');
 });

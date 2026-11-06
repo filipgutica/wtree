@@ -3,10 +3,11 @@ import App from '../App.vue';
 import libraryThemeCss from '@filipgutica/ui/theme.css?raw';
 import sitePaletteCss from '@filipgutica/ui/themes/graphite-indigo.css?raw';
 import { siteThemeBootScript } from '@filipgutica/ui/site';
+import projectThemeCss from '../styles/site.css?raw';
 import '../styles/site.css';
 
 // Keep the library roles and page branding consistent without the theme boot script.
-const darkTokens = [libraryThemeCss, sitePaletteCss].map((css) => {
+const darkTokens = [libraryThemeCss, sitePaletteCss, projectThemeCss].map((css) => {
   const tokens = css.match(/:root\.dark\s*\{([^}]+)\}/)?.[1];
   if (!tokens) throw new Error('The dark theme tokens are missing.');
   return tokens;

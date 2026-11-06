@@ -164,7 +164,14 @@ for (const width of [320, 390, 768, 801, 1280]) {
       await expect(siteLinks).toBeHidden();
       const sourceLink = page.locator('.fg-site-facts').getByRole('link', { name: 'filipgutica/wtree' });
       await expect(sourceLink).toHaveAttribute('href', 'https://github.com/filipgutica/wtree');
-      expect((await sourceLink.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+      await sourceLink.scrollIntoViewIfNeeded();
+      // The library expands the hit area beyond the text with a pseudo-element.
+      expect(await sourceLink.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        return [-21, 21].every((offset) => document.elementFromPoint(
+          box.x + box.width / 2, box.y + box.height / 2 + offset,
+        )?.closest('a') === element);
+      })).toBe(true);
       await expect(page.locator('.fg-site-footer').getByRole('link', { name: 'Releases', exact: true })).toHaveAttribute(
         'href', 'https://github.com/filipgutica/wtree/releases',
       );
@@ -209,22 +216,23 @@ for (const width of [320, 390, 768, 801, 1280]) {
     }
     await expect(page.locator('.fg-capture__figure:visible')).toHaveCount(1);
     const frame = page.locator('#frame-browse');
-    await expect
-      .poll(() =>
-        frame
-          .locator('.term')
-          .evaluate(
-            (element) =>
-              element.getBoundingClientRect().width -
-              (element.parentElement?.clientWidth ?? 0),
-          ),
-      )
-      .toBeLessThan(2);
+    const screen = frame.locator('.fg-capture__screen');
+    if (width <= 390) {
+      // Narrow captures keep readable type and scroll inside the plate.
+      expect(await screen.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+      await expect(frame.locator('.term')).toHaveCSS('transform', 'none');
+    } else {
+      await expect
+        .poll(() => frame.locator('.term').evaluate((element) =>
+          element.getBoundingClientRect().width - (element.parentElement?.clientWidth ?? 0),
+        ))
+        .toBeLessThan(2);
+    }
     await expect(frame.locator('.term')).toContainText('feat/usage-charts');
     await expect(frame.locator('.term')).toContainText('main');
     await checkProjectMenu(page);
     if (width <= 800)
-      await page.getByRole('button', { name: 'On this page', exact: true }).click();
+      await page.getByRole('button', { name: /^On this page:/ }).click();
     await expect(
       page.getByRole('navigation', { name: 'On this page' }),
     ).toBeVisible();
@@ -341,15 +349,15 @@ test('library tabs support keyboard navigation and retained capture content', as
   ).toBeFocused();
 });
 
-test('clicking the capture opens the full-size dialog and restores focus', async ({
+test('capture full-size controls and desktop preview restore focus', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await load(page);
-  const trigger = page.getByRole('button', { name: 'Expand Browse capture' });
+  const trigger = page.getByRole('button', { name: 'Expand Browse capture at full size', exact: true });
   await expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
-  await page.locator('#frame-browse .fg-capture__preview').click();
-  const dialog = page.getByRole('dialog', { name: 'Browse capture' });
+  await trigger.click();
+  const dialog = page.getByRole('dialog', { name: 'Browse capture', exact: true });
   await expect(dialog).toBeVisible();
   await expect(dialog.locator('.term')).toContainText('wtree — demo-api');
   expect(
@@ -373,6 +381,13 @@ test('clicking the capture opens the full-size dialog and restores focus', async
     await expect(dialog).not.toBeVisible();
     await expect(trigger).toBeFocused();
   }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(page.locator('#frame-browse .fg-capture__screen')).toHaveAttribute('data-fit', 'true');
+  await page.locator('#frame-browse .fg-capture__preview').click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(trigger).toBeFocused();
 });
 
 test('drawer focus, dismissal, anchor destination, and desktop breakpoint', async ({
@@ -380,7 +395,7 @@ test('drawer focus, dismissal, anchor destination, and desktop breakpoint', asyn
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await load(page);
-  const trigger = page.getByRole('button', { name: 'On this page', exact: true });
+  const trigger = page.getByRole('button', { name: /^On this page:/ });
   await trigger.click();
   const drawer = page.getByRole('dialog', { name: 'On this page' });
   await expect(drawer).toBeVisible();
@@ -412,7 +427,7 @@ test('drawer focus, dismissal, anchor destination, and desktop breakpoint', asyn
     page.getByRole('navigation', { name: 'On this page' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'On this page', exact: true }),
+    page.getByRole('button', { name: /^On this page:/ }),
   ).not.toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(trigger).toBeVisible();
@@ -424,7 +439,7 @@ test('navigation focus survives both breakpoints without stealing content focus'
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await load(page);
-  const trigger = page.getByRole('button', { name: 'On this page', exact: true });
+  const trigger = page.getByRole('button', { name: /^On this page:/ });
   const firstSectionLink = page
     .getByRole('navigation', { name: 'On this page' })
     .getByRole('link', { name: 'Install', exact: true });
@@ -514,6 +529,7 @@ test('themes preserve saved choice, system changes, and cross-tab storage', asyn
   await load(page);
   await picker(page).getByRole('button', { name: 'Dark theme', exact: true }).click();
   await expect(page.locator('html')).toHaveClass('dark');
+  await expect(page.locator('html')).toHaveCSS('--color-project-dark', '#7fd083');
   expect(
     await page.evaluate(() => localStorage.getItem('tool-site-theme')),
   ).toBe('dark');
