@@ -590,6 +590,8 @@ test('reference content keeps its reading order and safety caveats', async ({ pa
     'Inspect your worktrees', 'Preview a cleanup, then run it', 'Set up wt to change directory',
     'Commands', 'Keys in wtree ui', 'Safety and exit codes',
   ]);
+  // The Commands table must not render empty; the copy-button test only iterates existing rows.
+  await expect(page.locator('section[aria-labelledby="commands-title"] tbody tr')).not.toHaveCount(0);
   const keys = page.locator('section[aria-labelledby="keys-title"]');
   await expect(keys.getByRole('columnheader').first()).toHaveText('Key');
   await expect(keys.getByRole('button')).toHaveCount(0);
@@ -600,6 +602,8 @@ test('reference content keeps its reading order and safety caveats', async ({ pa
   await expect(caveats).toContainText('never removed, even with --force');
   await expect(caveats).toContainText('print the plan and exit 2');
   await expect(caveats).toContainText('instead of reporting no matches');
+  await expect(caveats).toContainText('exits 3 and removes nothing');
+  await expect(caveats).toContainText('Forced removal can discard uncommitted work');
 });
 
 test('shows each key as a keycap', async ({ page }) => {
