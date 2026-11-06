@@ -13,12 +13,12 @@ export interface Capture {
 
 export const captures: readonly Capture[] = [
   { id: 'browse', label: 'Browse', command: 'wtree ui', html: browse },
-  { id: 'select', label: 'Select', command: 'Space', html: select },
-  { id: 'review', label: 'Review', command: 'd', html: review },
-  { id: 'list', label: 'List', command: 'wtree', html: list },
+  { id: 'select', label: 'Select worktrees', command: 'Space', html: select },
+  { id: 'review', label: 'Review removal', command: 'd', html: review },
+  { id: 'list', label: 'List worktrees', command: 'wtree', html: list },
   {
     id: 'plan',
-    label: 'Dry run',
+    label: 'Preview cleanup',
     command: 'wtree clean --done --dry-run',
     html: plan,
   },

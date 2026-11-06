@@ -18,7 +18,7 @@ for (const width of [320, 390, 768, 801, 1280]) {
     ).toHaveCount(0);
     await expect(page.locator('.fg-capture__expand')).toHaveCount(0);
     await expect(
-      page.getByRole('heading', { name: 'List and clean up Git worktrees.', level: 1 }),
+      page.getByRole('heading', { name: 'Clean up finished Git worktrees.', level: 1 }),
     ).toBeVisible();
     await expect(page.locator('#install pre code')).toHaveText(
       'brew install filipgutica/tap/wtree',
@@ -66,7 +66,7 @@ test('no-JavaScript deep link reaches content after every capture', async ({
 }) => {
   await page.goto('/wtree/#keys-title');
   await expect(page.locator('#keys-title')).toBeInViewport();
-  await expect(page.locator('#limits-title')).toHaveText('Good to know');
+  await expect(page.locator('#limits-title')).toHaveText('Safety and exit codes');
 });
 
 test('no-JavaScript readers follow the OS dark theme from the library palette', async ({
