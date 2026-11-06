@@ -64,32 +64,36 @@ const shellCommands = [
     />
     <UiSiteNav label="On this page" :groups="sections" />
     <main id="main">
-      <section class="intro" aria-labelledby="title">
+      <section class="fg-site-hero" aria-labelledby="title">
         <h1 id="title">Clean up finished Git worktrees.</h1>
-        <p class="lede">
-          wtree shows each worktree's age, local changes, and GitHub pull request state.
-          Review the cleanup plan before you remove finished worktrees.
-        </p>
-        <div id="install" class="install">
-          <p class="fg-site-meta">Install with Homebrew</p>
-          <UiCodeBlock
-            code="brew install filipgutica/tap/wtree"
-            language="bash"
-            variant="compact"
-            :copyable="enhanced"
-            :wrap="true"
-          />
-          <div class="meta">
-            <p class="fg-site-meta">
-              Homebrew also installs Node.js.
-              <a href="https://brew.sh/">Install Homebrew</a> first if you need it.
-              For pull request state, wtree uses the GitHub CLI, <code>gh</code>, which must be signed in.
-            </p>
-            <dl class="fg-site-facts">
-              <div><dt>Runs on</dt><dd>macOS and Linux</dd></div>
-              <div><dt>Needs</dt><dd>Git and Node.js 20+</dd></div>
-              <div><dt>Source</dt><dd><a href="https://github.com/filipgutica/wtree">filipgutica/wtree</a></dd></div>
-            </dl>
+        <div class="fg-site-hero__lede">
+          <p class="lede">
+            wtree shows each worktree's age, local changes, and GitHub pull request state.
+            Review the cleanup plan before you remove finished worktrees.
+          </p>
+        </div>
+        <div class="fg-site-hero__aside">
+          <div id="install" class="install">
+            <p class="fg-site-meta">Install with Homebrew</p>
+            <UiCodeBlock
+              code="brew install filipgutica/tap/wtree"
+              language="bash"
+              variant="compact"
+              :copyable="enhanced"
+              :wrap="true"
+            />
+            <div class="meta">
+              <p class="fg-site-meta">
+                Homebrew also installs Node.js.
+                <a href="https://brew.sh/">Install Homebrew</a> first if you need it.
+                For pull request state, wtree uses the GitHub CLI, <code>gh</code>, which must be signed in.
+              </p>
+              <dl class="fg-site-facts">
+                <div><dt>Runs on</dt><dd>macOS and Linux</dd></div>
+                <div><dt>Needs</dt><dd>Git and Node.js 20+</dd></div>
+                <div><dt>Source</dt><dd><a href="https://github.com/filipgutica/wtree">filipgutica/wtree</a></dd></div>
+              </dl>
+            </div>
           </div>
         </div>
       </section>
