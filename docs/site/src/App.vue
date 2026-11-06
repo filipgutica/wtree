@@ -19,7 +19,7 @@ const sections = [{ items: [
   { label: 'Good to know', href: '#limits-title' },
 ] }];
 const commands = [
-  { command: 'wtree', description: 'List every worktree, with main first and the oldest next.' },
+  { command: 'wtree', description: 'List every worktree, with main first and the oldest next. Age counts from the last commit unless you pass --age-by checkout or --age-by created.' },
   { command: 'wtree ui', description: 'Browse, filter, and select worktrees, then remove them.' },
   { command: 'wtree clean --done --dry-run', description: 'Show which worktrees with merged or closed pull requests would be removed.' },
   { command: 'wtree new feat/example', description: 'Create a worktree for the branch, or print its path if it already has one.' },
@@ -150,8 +150,8 @@ const shellCommands = [
               and <code>wt ui</code> change directory too.
             </template>
             <template v-else>
-              Add this line to <code>~/.zshrc</code>. For bash, write <code>bash</code>
-              and add it to <code>~/.bashrc</code>.
+              Run this line now to enable <code>wt</code>, and add it to <code>~/.zshrc</code> for new shells.
+              For bash, write <code>bash</code> in place of <code>zsh</code> and use <code>~/.bashrc</code>.
             </template>
           </template>
         </UiCommandList>
@@ -164,7 +164,7 @@ const shellCommands = [
           <dt>Protected</dt>
           <dd>wtree never removes the main worktree or the one you are in. Worktrees with uncommitted changes, unpushed commits, or a lock need <code>--force</code>. wtree counts unpushed commits only on branches that have an upstream.</dd>
           <dt>Unknown PR state</dt>
-          <dd>wtree keeps recent pull request state in a short-lived cache. If the cache is stale and <code>gh</code> is missing, signed out, or offline, wtree has no pull request state. A cleanup that filters on it, such as <code>wtree clean --done</code>, then stops with an error instead of reporting no matches.</dd>
+          <dd>wtree keeps pull request state in a cache for 10 minutes by default, and <code>--refresh</code> asks GitHub again. If the cache is stale and <code>gh</code> is missing, signed out, or offline, wtree has no pull request state. A cleanup that filters on it, such as <code>wtree clean --done</code>, then stops with an error instead of reporting no matches.</dd>
           <dt>Without a terminal</dt>
           <dd>When stdin or stdout is not a terminal, no one can answer the prompt. <code>clean</code>, <code>rm</code>, and <code>prune</code> then print the plan and exit 2 when there is something to remove, unless you pass <code>--dry-run</code> or <code>--yes</code>. <code>wtree ui</code> needs a terminal on stdin and stderr, and exits 2 without one.</dd>
         </dl>
