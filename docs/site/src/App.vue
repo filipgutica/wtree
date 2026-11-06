@@ -99,8 +99,8 @@ const shellCommands = [
                 remove them. <kbd>b</kbd> turns branch deletion on or off.
               </p>
               <p v-else-if="item.id === 'list'">
-                Plain <code>wtree</code> prints the same rows as a table. When there is
-                something to clean up, it ends with a hint that names the command to run.
+                Plain <code>wtree</code> prints the same rows as a table. At a terminal, when pull
+                requests are merged or closed or worktrees are prunable, it ends with a hint that names the command to run.
               </p>
               <p v-else-if="item.id === 'plan'">
                 A dry run prints the cleanup plan for worktrees whose pull requests are
@@ -122,7 +122,7 @@ const shellCommands = [
       </section>
       <section aria-labelledby="commands-title">
         <h2 id="commands-title">Commands</h2>
-        <p class="section-intro">Each command works on the Git repository you run it in.</p>
+        <p class="section-intro">Commands work on the Git repository in the current directory. Pass <code>-C &lt;dir&gt;</code> to use another one.</p>
         <UiCommandList :items="commands">
           <template #description="{ item }">
             <template v-if="item.command === 'wtree --size'">Also measure each worktree's disk usage with <code>du</code>. It is off by default because it is slow on large worktrees.</template>
@@ -162,11 +162,11 @@ const shellCommands = [
           <dt>Cleanup</dt>
           <dd>wtree removes nothing until you confirm the plan. <code>--yes</code> skips the question, and <code>--dry-run</code> only prints the plan. Branches stay unless you pass <code>--delete-branch</code> or press <kbd>b</kbd> in <code>wtree ui</code>.</dd>
           <dt>Protected</dt>
-          <dd>wtree never removes the main worktree or the one you are in. Worktrees with uncommitted changes, unpushed commits, or a lock need <code>--force</code>.</dd>
+          <dd>wtree never removes the main worktree or the one you are in. Worktrees with uncommitted changes, unpushed commits, or a lock need <code>--force</code>. wtree counts unpushed commits only on branches that have an upstream.</dd>
           <dt>Unknown PR state</dt>
           <dd>wtree keeps recent pull request state in a short-lived cache. If the cache is stale and <code>gh</code> is missing, signed out, or offline, wtree has no pull request state. A cleanup that filters on it, such as <code>wtree clean --done</code>, then stops with an error instead of reporting no matches.</dd>
           <dt>Without a terminal</dt>
-          <dd>In a script or pipe, no one can answer the prompt. <code>clean</code>, <code>rm</code>, and <code>prune</code> then print the plan and exit 2 when there is something to remove, unless you pass <code>--dry-run</code> or <code>--yes</code>. <code>wtree ui</code> exits 2 instead of starting.</dd>
+          <dd>When stdin or stdout is not a terminal, no one can answer the prompt. <code>clean</code>, <code>rm</code>, and <code>prune</code> then print the plan and exit 2 when there is something to remove, unless you pass <code>--dry-run</code> or <code>--yes</code>. <code>wtree ui</code> needs a terminal on stdin and stderr, and exits 2 without one.</dd>
         </dl>
         <nav class="links" aria-label="Documentation">
           <a href="https://github.com/filipgutica/wtree#readme">Full reference</a>
