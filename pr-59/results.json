@@ -1,0 +1,327 @@
+{
+  "head": "898f865bfa2cb5597217c6e953427fe90e103b4b",
+  "chromium": [
+    {
+      "phase": "before",
+      "width": 320,
+      "url": "https://filipgutica.github.io/wtree/",
+      "title": "wtree: Clean up finished Git worktrees",
+      "dpr": 2,
+      "closed": {
+        "viewport": 320,
+        "document": 320,
+        "body": 320,
+        "overflow": false
+      },
+      "errors": [],
+      "designSystem": 1,
+      "menu": {
+        "viewport": 320,
+        "document": 320,
+        "body": 320,
+        "overflow": false
+      },
+      "drawer": {
+        "viewport": 320,
+        "document": 320,
+        "body": 320,
+        "overflow": false
+      },
+      "viewer": {
+        "rect": {
+          "x": 0,
+          "y": 300.8125,
+          "width": 322,
+          "height": 543.1875,
+          "right": 322,
+          "bottom": 844,
+          "boxSizing": "content-box"
+        },
+        "overflow": {
+          "viewport": 320,
+          "document": 320,
+          "body": 320,
+          "overflow": false
+        }
+      }
+    },
+    {
+      "phase": "before",
+      "width": 390,
+      "url": "https://filipgutica.github.io/wtree/",
+      "title": "wtree: Clean up finished Git worktrees",
+      "dpr": 2,
+      "closed": {
+        "viewport": 390,
+        "document": 390,
+        "body": 390,
+        "overflow": false
+      },
+      "errors": [],
+      "designSystem": 1,
+      "menu": {
+        "viewport": 390,
+        "document": 390,
+        "body": 390,
+        "overflow": false
+      },
+      "drawer": {
+        "viewport": 390,
+        "document": 390,
+        "body": 390,
+        "overflow": false
+      },
+      "viewer": {
+        "rect": {
+          "x": 0,
+          "y": 300.8125,
+          "width": 392,
+          "height": 543.1875,
+          "right": 392,
+          "bottom": 844,
+          "boxSizing": "content-box"
+        },
+        "overflow": {
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflow": false
+        }
+      }
+    },
+    {
+      "phase": "before",
+      "width": 1280,
+      "url": "https://filipgutica.github.io/wtree/",
+      "title": "wtree: Clean up finished Git worktrees",
+      "dpr": 2,
+      "closed": {
+        "viewport": 1280,
+        "document": 1280,
+        "body": 1280,
+        "overflow": false
+      },
+      "errors": [],
+      "designSystem": 1,
+      "menu": {
+        "viewport": 1280,
+        "document": 1280,
+        "body": 1280,
+        "overflow": false
+      },
+      "viewer": {
+        "rect": {
+          "x": 159,
+          "y": 150.40625,
+          "width": 962,
+          "height": 543.1875,
+          "right": 1121,
+          "bottom": 693.59375,
+          "boxSizing": "content-box"
+        },
+        "overflow": {
+          "viewport": 1280,
+          "document": 1280,
+          "body": 1280,
+          "overflow": false
+        }
+      }
+    },
+    {
+      "phase": "after",
+      "width": 320,
+      "url": "http://127.0.0.1:43959/wtree/",
+      "title": "wtree: Clean up finished Git worktrees",
+      "dpr": 2,
+      "closed": {
+        "viewport": 320,
+        "document": 320,
+        "body": 320,
+        "overflow": false
+      },
+      "errors": [],
+      "designSystem": 1,
+      "menu": {
+        "viewport": 320,
+        "document": 320,
+        "body": 320,
+        "overflow": false
+      },
+      "drawer": {
+        "viewport": 320,
+        "document": 320,
+        "body": 320,
+        "overflow": false
+      },
+      "viewer": {
+        "rect": {
+          "x": 0,
+          "y": 300.8125,
+          "width": 320,
+          "height": 543.1875,
+          "right": 320,
+          "bottom": 844,
+          "boxSizing": "border-box"
+        },
+        "overflow": {
+          "viewport": 320,
+          "document": 320,
+          "body": 320,
+          "overflow": false
+        }
+      }
+    },
+    {
+      "phase": "after",
+      "width": 390,
+      "url": "http://127.0.0.1:43959/wtree/",
+      "title": "wtree: Clean up finished Git worktrees",
+      "dpr": 2,
+      "closed": {
+        "viewport": 390,
+        "document": 390,
+        "body": 390,
+        "overflow": false
+      },
+      "errors": [],
+      "designSystem": 1,
+      "menu": {
+        "viewport": 390,
+        "document": 390,
+        "body": 390,
+        "overflow": false
+      },
+      "drawer": {
+        "viewport": 390,
+        "document": 390,
+        "body": 390,
+        "overflow": false
+      },
+      "viewer": {
+        "rect": {
+          "x": 0,
+          "y": 300.8125,
+          "width": 390,
+          "height": 543.1875,
+          "right": 390,
+          "bottom": 844,
+          "boxSizing": "border-box"
+        },
+        "overflow": {
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflow": false
+        }
+      }
+    },
+    {
+      "phase": "after",
+      "width": 1280,
+      "url": "http://127.0.0.1:43959/wtree/",
+      "title": "wtree: Clean up finished Git worktrees",
+      "dpr": 2,
+      "closed": {
+        "viewport": 1280,
+        "document": 1280,
+        "body": 1280,
+        "overflow": false
+      },
+      "errors": [],
+      "designSystem": 1,
+      "menu": {
+        "viewport": 1280,
+        "document": 1280,
+        "body": 1280,
+        "overflow": false
+      },
+      "viewer": {
+        "rect": {
+          "x": 159,
+          "y": 150.40625,
+          "width": 962,
+          "height": 543.1875,
+          "right": 1121,
+          "bottom": 693.59375,
+          "boxSizing": "content-box"
+        },
+        "overflow": {
+          "viewport": 1280,
+          "document": 1280,
+          "body": 1280,
+          "overflow": false
+        }
+      }
+    }
+  ],
+  "webkit": [
+    {
+      "phase": "before",
+      "device": "iPhone 13",
+      "viewport": {
+        "width": 390,
+        "height": 664
+      },
+      "drawer": {
+        "x": -115.35562133789062,
+        "y": 0,
+        "width": 272,
+        "height": 664,
+        "right": 156.64437866210938,
+        "bottom": 664,
+        "boxSizing": "border-box"
+      },
+      "drawerOutsideTapClosed": true,
+      "viewer": {
+        "x": 0,
+        "y": 120.8125,
+        "width": 392,
+        "height": 543.1875,
+        "right": 392,
+        "bottom": 664,
+        "boxSizing": "content-box"
+      },
+      "viewerOutsideTapClosed": true,
+      "focusReturned": true,
+      "activeElement": {
+        "tag": "BUTTON",
+        "label": "Expand Browse capture at full size",
+        "text": "Full size"
+      }
+    },
+    {
+      "phase": "after",
+      "device": "iPhone 13",
+      "viewport": {
+        "width": 390,
+        "height": 664
+      },
+      "drawer": {
+        "x": -107.32049560546875,
+        "y": 0,
+        "width": 272,
+        "height": 664,
+        "right": 164.67950439453125,
+        "bottom": 664,
+        "boxSizing": "border-box"
+      },
+      "drawerOutsideTapClosed": true,
+      "viewer": {
+        "x": 0,
+        "y": 120.8125,
+        "width": 390,
+        "height": 543.1875,
+        "right": 390,
+        "bottom": 664,
+        "boxSizing": "border-box"
+      },
+      "viewerOutsideTapClosed": true,
+      "focusReturned": true,
+      "activeElement": {
+        "tag": "BUTTON",
+        "label": "Expand Browse capture at full size",
+        "text": "Full size"
+      }
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+[
+  {
+    "state": "1280-header",
+    "width": 2560,
+    "height": 320,
+    "changedPixels": 0,
+    "bounds": null
+  },
+  {
+    "state": "390-drawer",
+    "width": 780,
+    "height": 1688,
+    "changedPixels": 0,
+    "bounds": null
+  },
+  {
+    "state": "390-viewer",
+    "width": 780,
+    "height": 1688,
+    "changedPixels": 8733,
+    "bounds": {
+      "minX": 476,
+      "minY": 576,
+      "maxX": 779,
+      "maxY": 1685
+    }
+  },
+  {
+    "state": "320-viewer",
+    "width": 640,
+    "height": 1688,
+    "changedPixels": 8732,
+    "bounds": {
+      "minX": 336,
+      "minY": 576,
+      "maxX": 639,
+      "maxY": 1685
+    }
+  }
+]
