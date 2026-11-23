@@ -24,5 +24,5 @@ main > section:not(.fg-site-hero) > * { min-width: 0; }
 .meta { gap: var(--space-2); }
 .section-intro { color: var(--color-muted); font-size: var(--text-reading); }
 .links { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); font-size: var(--text-sm); }
-.links a { display: inline-flex; align-items: center; min-height: var(--control-lg); text-decoration: none; }
+.links a { display: inline-flex; align-items: center; min-height: var(--control-touch); text-decoration: none; }
 .links a:hover { text-decoration: underline; }
